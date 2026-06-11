@@ -1,0 +1,49 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# XcodeGen output
+/CodexMonitor.xcodeproj/
+
+# Xcode local state
+xcuserdata/
+*.xcuserdatad/
+*.xcuserstate
+*.xcscmblueprint
+*.moved-aside
+DerivedData/
+*.xccheckout
+
+# Build and test products
+/build/
+/.build/
+/dist/
+/*.ipa
+/*.pkg
+/*.dmg
+*.xcresult
+*.dSYM/
+*.dSYM.zip
+*.app
+*.appex
+
+# SwiftPM local state
+/.swiftpm/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
+*.local.*
+.codex/environments/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*~

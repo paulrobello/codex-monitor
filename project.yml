@@ -1,0 +1,155 @@
+name: CodexMonitor
+options:
+  bundleIdPrefix: net.pardev
+  deploymentTarget:
+    iOS: "17.0"
+    macOS: "15.0"
+settings:
+  base:
+    CURRENT_PROJECT_VERSION: 3
+    DEVELOPMENT_TEAM: QMLVG482FY
+    MARKETING_VERSION: 0.1.0
+    SWIFT_VERSION: 6.0
+targets:
+  CodexUsageCore:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/CodexUsageCore
+    settings:
+      base:
+        INFOPLIST_FILE: Sources/CodexUsageCore/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: net.pardev.CodexUsageCore
+  CodexUsageCoreiOS:
+    type: framework
+    platform: iOS
+    sources:
+      - Sources/CodexUsageCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        PRODUCT_BUNDLE_IDENTIFIER: net.pardev.CodexUsageCore.iOS
+        PRODUCT_MODULE_NAME: CodexUsageCore
+        PRODUCT_NAME: CodexUsageCore
+  CodexUsageCLI:
+    type: tool
+    platform: macOS
+    sources:
+      - Sources/CodexUsageCLI
+    dependencies:
+      - target: CodexUsageCore
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: Sources/CodexUsageCLI/CodexUsageCLI.entitlements
+        OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
+        PRODUCT_NAME: codex-usage
+  CodexMonitor:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/CodexMonitorApp
+    dependencies:
+      - target: CodexUsageCore
+      - target: CodexMonitorWidgetExtension
+        embed: true
+        codeSign: true
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: Sources/CodexMonitorApp/CodexMonitor.entitlements
+        ENABLE_APP_SANDBOX: true
+        ENABLE_DEBUG_DYLIB: false
+        INFOPLIST_FILE: Sources/CodexMonitorApp/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: net.pardev.CodexMonitor
+  CodexMonitorWidgetExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - Sources/CodexMonitorWidget
+    dependencies:
+      - target: CodexUsageCore
+    settings:
+      base:
+        APPLICATION_EXTENSION_API_ONLY: true
+        CODE_SIGN_ENTITLEMENTS: Sources/CodexMonitorWidget/CodexMonitorWidget.entitlements
+        ENABLE_APP_SANDBOX: true
+        ENABLE_DEBUG_DYLIB: false
+        INFOPLIST_FILE: Sources/CodexMonitorWidget/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: net.pardev.CodexMonitor.Widget
+        SKIP_INSTALL: true
+  CodexMonitoriOS:
+    type: application
+    platform: iOS
+    sources:
+      - Sources/CodexMonitoriOS
+    dependencies:
+      - target: CodexUsageCoreiOS
+      - target: CodexMonitorWidgetExtensioniOS
+        embed: true
+        codeSign: true
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: Sources/CodexMonitoriOS/CodexMonitoriOS.entitlements
+        ENABLE_DEBUG_DYLIB: false
+        GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_KEY_CFBundleDisplayName: Codex Monitor
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        INFOPLIST_KEY_UILaunchScreen_Generation: true
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        PRODUCT_BUNDLE_IDENTIFIER: net.pardev.CodexMonitor.iOS
+        SUPPORTS_MACCATALYST: false
+        TARGETED_DEVICE_FAMILY: "1,2"
+  CodexMonitorWidgetExtensioniOS:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Sources/CodexMonitorWidget
+    dependencies:
+      - target: CodexUsageCoreiOS
+    settings:
+      base:
+        APPLICATION_EXTENSION_API_ONLY: true
+        CODE_SIGN_ENTITLEMENTS: Sources/CodexMonitoriOS/CodexMonitorWidgetiOS.entitlements
+        ENABLE_DEBUG_DYLIB: false
+        INFOPLIST_FILE: Sources/CodexMonitorWidget/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: net.pardev.CodexMonitor.iOS.Widget
+        PRODUCT_MODULE_NAME: CodexMonitorWidgetExtension
+        SKIP_INSTALL: true
+  CodexUsageCoreTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/CodexUsageCoreTests
+    dependencies:
+      - target: CodexUsageCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        PRODUCT_BUNDLE_IDENTIFIER: net.pardev.CodexUsageCoreTests
+schemes:
+  CodexMonitor:
+    build:
+      targets:
+        CodexMonitor: all
+        CodexUsageCLI: all
+        CodexUsageCoreTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - CodexUsageCoreTests
+  CodexUsageCLI:
+    build:
+      targets:
+        CodexUsageCLI: all
+    run:
+      config: Debug
+  CodexMonitoriOS:
+    build:
+      targets:
+        CodexMonitoriOS: all
+    run:
+      config: Debug

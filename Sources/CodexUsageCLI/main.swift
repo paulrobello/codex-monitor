@@ -1,0 +1,70 @@
+import CodexUsageCore
+import Darwin
+import Foundation
+
+@main
+struct CodexUsageCLI {
+  static func main() async {
+    let arguments = Array(CommandLine.arguments.dropFirst())
+    let command = arguments.first ?? "refresh"
+    let authStore = CodexAuthStore()
+    let cache = CodexUsageCache()
+    let settingsStore = CodexSettingsStore()
+
+    do {
+      switch command {
+      case "login":
+        let credentials = try await authStore.login(openAuthorizationURL: openURL)
+        print(
+          credentials.accountId.map { "Signed in to Codex account \($0)." } ?? "Signed in to Codex."
+        )
+      case "refresh":
+        let snapshot = try await CodexUsageClient().fetchUsage(authStore: authStore)
+        try cache.save(snapshot: snapshot)
+        print(String(data: try JSONEncoder.codexMonitor.encode(snapshot), encoding: .utf8) ?? "{}")
+      case "print":
+        if let snapshot = try cache.loadSnapshot() {
+          print(
+            String(data: try JSONEncoder.codexMonitor.encode(snapshot), encoding: .utf8) ?? "{}")
+        } else {
+          eprint("No cached Codex usage snapshot at \(cache.cacheURL.path).")
+          exit(1)
+        }
+      case "cache-path":
+        print(cache.cacheURL.path)
+      case "clear-auth":
+        try authStore.clearMonitorCredentials()
+        print("Cleared Codex Monitor auth from \(authStore.authStorageDescription).")
+      case "interval":
+        if let rawValue = arguments.dropFirst().first, let minutes = Int(rawValue) {
+          let settings = CodexMonitorSettings(refreshIntervalMinutes: minutes)
+          try settingsStore.save(settings)
+          print("Usage refresh interval set to \(settings.refreshIntervalMinutes) minutes.")
+        } else {
+          print("\(settingsStore.load().refreshIntervalMinutes)")
+        }
+      default:
+        eprint("usage: codex-usage [login|refresh|print|cache-path|clear-auth|interval [minutes]]")
+        exit(2)
+      }
+    } catch {
+      eprint(error.localizedDescription)
+      exit(1)
+    }
+  }
+
+  private static func eprint(_ value: String) {
+    FileHandle.standardError.write(Data((value + "\n").utf8))
+  }
+
+  private static func openURL(_ url: URL) async throws {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+    process.arguments = [url.absoluteString]
+    try process.run()
+    process.waitUntilExit()
+    if process.terminationStatus != 0 {
+      throw CodexUsageError.oauthCallbackFailed("could not open browser")
+    }
+  }
+}
