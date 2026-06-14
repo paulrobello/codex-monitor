@@ -173,6 +173,38 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertFalse(source.contains("Text(date, style: .relative)"))
   }
 
+  func testUsageBarsUseAccentableCustomWidgetFillAndReloadOnAppStart() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let widgetSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent(
+        "Sources/CodexMonitorWidget/CodexMonitorWidget.swift"),
+      encoding: .utf8
+    )
+    let appSources = [
+      repositoryRoot.appendingPathComponent("Sources/CodexMonitorApp/CodexMonitorApp.swift"),
+      repositoryRoot.appendingPathComponent("Sources/CodexMonitoriOS/CodexMonitoriOSApp.swift"),
+    ]
+
+    XCTAssertTrue(widgetSource.contains("struct UsageProgressBar: View"))
+    XCTAssertTrue(widgetSource.contains("@Environment(\\.widgetRenderingMode)"))
+    XCTAssertTrue(widgetSource.contains("widgetRenderingMode == .fullColor"))
+    XCTAssertTrue(widgetSource.contains(".frame(width: geometry.size.width * progress)"))
+    XCTAssertTrue(widgetSource.contains(".widgetAccentable()"))
+    XCTAssertTrue(widgetSource.contains(".padding(.horizontal, family == .systemSmall ? 14 : 20)"))
+    XCTAssertTrue(widgetSource.contains(".padding(.vertical, family == .systemSmall ? 14 : 18)"))
+    XCTAssertTrue(widgetSource.contains("VStack(alignment: .leading, spacing: family == .systemSmall ? 7 : 8)"))
+    XCTAssertFalse(widgetSource.contains("ProgressView(value: window.remainingPercent, total: 100)"))
+
+    for appSource in appSources {
+      let source = try String(contentsOf: appSource, encoding: .utf8)
+      XCTAssertTrue(source.contains("func start() {\n    WidgetCenter.shared.reloadAllTimelines()"))
+    }
+  }
+
   func testPersistsSettings() throws {
     let url = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)

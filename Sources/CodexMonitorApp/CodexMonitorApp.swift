@@ -130,6 +130,7 @@ final class UsageStore: ObservableObject {
   }
 
   func start() {
+    WidgetCenter.shared.reloadAllTimelines()
     restartRefreshLoop(runImmediately: true)
   }
 
@@ -500,8 +501,7 @@ struct UsageWindowView: View {
           .foregroundStyle(tint)
       }
       if window.valueText == nil {
-        ProgressView(value: window.remainingPercent, total: 100)
-          .tint(tint)
+        UsageProgressBar(value: window.remainingPercent, tint: tint)
       }
       Text(resetText)
         .font(.callout)
@@ -527,5 +527,27 @@ struct UsageWindowView: View {
       return "Weekly window"
     }
     return window.label
+  }
+}
+
+struct UsageProgressBar: View {
+  var value: Double
+  var tint: Color
+
+  private var progress: Double {
+    min(max(value / 100, 0), 1)
+  }
+
+  var body: some View {
+    GeometryReader { geometry in
+      ZStack(alignment: .leading) {
+        Capsule()
+          .fill(Color.secondary.opacity(0.18))
+        Capsule()
+          .fill(tint)
+          .frame(width: geometry.size.width * progress)
+      }
+    }
+    .frame(height: 8)
   }
 }

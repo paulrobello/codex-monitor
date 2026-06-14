@@ -186,7 +186,7 @@ struct CodexMonitorWidgetView: View {
   var entry: CodexUsageEntry
 
   var body: some View {
-    VStack(alignment: .leading, spacing: family == .systemSmall ? 8 : 12) {
+    VStack(alignment: .leading, spacing: family == .systemSmall ? 7 : 8) {
       HStack(spacing: 7) {
         Image(systemName: "gauge.with.dots.needle.bottom.50percent")
           .font(.system(size: family == .systemSmall ? 14 : 16, weight: .semibold))
@@ -222,7 +222,8 @@ struct CodexMonitorWidgetView: View {
         Spacer()
       }
     }
-    .padding(family == .systemSmall ? 10 : 16)
+    .padding(.horizontal, family == .systemSmall ? 14 : 20)
+    .padding(.vertical, family == .systemSmall ? 14 : 18)
     .containerBackground(.background, for: .widget)
   }
 
@@ -258,7 +259,7 @@ struct WidgetUsageRow: View {
   var window: CodexUsageWindow
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 4) {
+    VStack(alignment: .leading, spacing: 3) {
       HStack {
         Text(displayLabel)
           .font(.caption)
@@ -267,8 +268,7 @@ struct WidgetUsageRow: View {
         remainingLabel
       }
       if window.valueText == nil {
-        ProgressView(value: window.remainingPercent, total: 100)
-          .tint(tint)
+        UsageProgressBar(value: window.remainingPercent, tint: tint)
       }
       Text(resetText)
         .font(.caption2)
@@ -323,6 +323,38 @@ struct WidgetUsageRow: View {
     .frame(minWidth: 46, alignment: .trailing)
     .lineLimit(1)
     .fixedSize(horizontal: true, vertical: false)
+  }
+}
+
+struct UsageProgressBar: View {
+  @Environment(\.widgetRenderingMode) private var widgetRenderingMode
+  var value: Double
+  var tint: Color
+
+  private var progress: Double {
+    min(max(value / 100, 0), 1)
+  }
+
+  private var fill: Color {
+    widgetRenderingMode == .fullColor ? tint.opacity(0.95) : Color.primary.opacity(0.92)
+  }
+
+  private var track: Color {
+    widgetRenderingMode == .fullColor ? Color.secondary.opacity(0.18) : Color.secondary.opacity(0.26)
+  }
+
+  var body: some View {
+    GeometryReader { geometry in
+      ZStack(alignment: .leading) {
+        Capsule()
+          .fill(track)
+        Capsule()
+          .fill(fill)
+          .frame(width: geometry.size.width * progress)
+          .widgetAccentable()
+      }
+    }
+    .frame(height: 6)
   }
 }
 
