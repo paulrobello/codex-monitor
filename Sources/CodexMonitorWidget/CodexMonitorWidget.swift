@@ -5,6 +5,7 @@ import WidgetKit
 
 struct CodexUsageEntry: TimelineEntry {
   let date: Date
+  let nextRefreshAt: Date
   let providerID: CodexUsageProviderID
   let snapshots: [CodexUsageSnapshot]
 }
@@ -55,12 +56,15 @@ struct CodexWidgetConfigurationIntent: WidgetConfigurationIntent {
 
 struct CodexUsageProvider: AppIntentTimelineProvider {
   func placeholder(in context: Context) -> CodexUsageEntry {
-    CodexUsageEntry(
-      date: Date(),
+    let date = Date()
+    let settings = CodexMonitorSettings()
+    return CodexUsageEntry(
+      date: date,
+      nextRefreshAt: settings.nextRefreshDate(after: date),
       providerID: .openAICodex,
       snapshots: [
         CodexUsageSnapshot(
-          fetchedAt: Date(),
+          fetchedAt: date,
           fiveHour: CodexUsageWindow(
             label: "5h", remainingPercent: 72, resetAt: Date().addingTimeInterval(3600)),
           weekly: CodexUsageWindow(
@@ -80,18 +84,25 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
     -> Timeline<CodexUsageEntry>
   {
     let entry = await loadEntry(providerID: configuration.providerID, refreshFromAPI: true)
-    let interval = CodexSettingsStore().load().refreshIntervalSeconds
-    return Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(interval)))
+    return Timeline(entries: [entry], policy: .after(entry.nextRefreshAt))
   }
 
   private func loadEntry(providerID: CodexUsageProviderID, refreshFromAPI: Bool) async
     -> CodexUsageEntry
   {
+    let date = Date()
+    let settings = CodexSettingsStore().load()
     if refreshFromAPI, let snapshot = await fetchAndCacheSnapshot(providerID: providerID) {
-      return CodexUsageEntry(date: Date(), providerID: providerID, snapshots: [snapshot])
+      return CodexUsageEntry(
+        date: date,
+        nextRefreshAt: settings.nextRefreshDate(after: date),
+        providerID: providerID,
+        snapshots: [snapshot]
+      )
     }
     return CodexUsageEntry(
-      date: Date(),
+      date: date,
+      nextRefreshAt: settings.nextRefreshDate(after: date),
       providerID: providerID,
       snapshots: cachedSnapshot(providerID: providerID).map { [$0] } ?? []
     )
@@ -162,8 +173,8 @@ struct CodexMonitorWidgetView: View {
           .allowsTightening(true)
           .layoutPriority(1)
         Spacer(minLength: 4)
-        if let fetchedAt = entry.snapshots.first?.fetchedAt {
-          Text(Self.relativeFormatter.localizedString(for: fetchedAt, relativeTo: Date()))
+        TimelineView(.periodic(from: entry.date.addingTimeInterval(1), by: 60)) { context in
+          Self.nextRefreshLabel(for: entry.nextRefreshAt, now: context.date)
             .font(.caption2)
             .foregroundStyle(.secondary)
             .lineLimit(1)
@@ -190,11 +201,31 @@ struct CodexMonitorWidgetView: View {
     .containerBackground(.background, for: .widget)
   }
 
-  private static let relativeFormatter: RelativeDateTimeFormatter = {
-    let formatter = RelativeDateTimeFormatter()
-    formatter.unitsStyle = .abbreviated
-    return formatter
-  }()
+  @ViewBuilder
+  private static func nextRefreshLabel(for date: Date, now: Date = Date()) -> some View {
+    let remaining = date.timeIntervalSince(now)
+    if remaining <= 0 {
+      Text("now")
+    } else if remaining < 60 {
+      Text(date, style: .timer)
+    } else {
+      Text(nextRefreshMinuteText(for: date, now: now))
+    }
+  }
+
+  private static func nextRefreshMinuteText(for date: Date, now: Date = Date()) -> String {
+    let totalMinutes = max(1, Int(ceil(date.timeIntervalSince(now) / 60)))
+    if totalMinutes < 60 {
+      return "in \(totalMinutes)m"
+    }
+
+    let hours = totalMinutes / 60
+    let minutes = totalMinutes % 60
+    if minutes == 0 {
+      return "in \(hours)h"
+    }
+    return "in \(hours)h \(minutes)m"
+  }
 
 }
 

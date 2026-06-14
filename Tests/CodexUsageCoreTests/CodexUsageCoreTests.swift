@@ -114,6 +114,31 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(CodexMonitorSettings(refreshIntervalMinutes: 3).refreshIntervalMinutes, 15)
   }
 
+  func testComputesNextRefreshDateFromEntryDate() {
+    let entryDate = Date(timeIntervalSince1970: 1_800_000_000)
+    let settings = CodexMonitorSettings(refreshIntervalMinutes: 15)
+
+    XCTAssertEqual(settings.nextRefreshDate(after: entryDate), entryDate.addingTimeInterval(15 * 60))
+  }
+
+  func testWidgetUsesMinuteOnlyRefreshTextUntilFinalMinute() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let widgetSource = repositoryRoot
+      .appendingPathComponent("Sources/CodexMonitorWidget/CodexMonitorWidget.swift")
+    let source = try String(contentsOf: widgetSource, encoding: .utf8)
+
+    XCTAssertTrue(source.contains("TimelineView(.periodic(from: entry.date.addingTimeInterval(1), by: 60))"))
+    XCTAssertTrue(source.contains("nextRefreshLabel(for: entry.nextRefreshAt, now: context.date)"))
+    XCTAssertTrue(source.contains("if remaining < 60"))
+    XCTAssertTrue(source.contains("Text(date, style: .timer)"))
+    XCTAssertTrue(source.contains("Text(nextRefreshMinuteText(for: date, now: now))"))
+    XCTAssertFalse(source.contains("Text(date, style: .relative)"))
+  }
+
   func testPersistsSettings() throws {
     let url = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)

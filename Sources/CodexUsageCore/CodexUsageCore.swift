@@ -1422,6 +1422,10 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
     TimeInterval(refreshIntervalMinutes * 60)
   }
 
+  public func nextRefreshDate(after date: Date) -> Date {
+    date.addingTimeInterval(refreshIntervalSeconds)
+  }
+
   public static func normalizedRefreshIntervalMinutes(_ value: Int) -> Int {
     allowedRefreshIntervalMinutes.contains(value) ? value : defaultRefreshIntervalMinutes
   }
