@@ -121,6 +121,37 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(settings.nextRefreshDate(after: entryDate), entryDate.addingTimeInterval(15 * 60))
   }
 
+  func testFormatsRefreshRemainingTextWithSecondsOnlyUnderMinute() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    XCTAssertEqual(
+      CodexRefreshText.remainingText(until: now.addingTimeInterval(45), now: now), "in 45s")
+    XCTAssertEqual(
+      CodexRefreshText.remainingText(until: now.addingTimeInterval(75), now: now), "in 2m")
+    XCTAssertEqual(
+      CodexRefreshText.remainingText(until: now.addingTimeInterval(65 * 60), now: now), "in 1h 5m")
+    XCTAssertEqual(CodexRefreshText.remainingText(until: now, now: now), "now")
+  }
+
+  func testAppViewsShowNextRefreshInsteadOfFetchedAge() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let appSources = [
+      repositoryRoot.appendingPathComponent("Sources/CodexMonitorApp/CodexMonitorApp.swift"),
+      repositoryRoot.appendingPathComponent("Sources/CodexMonitoriOS/CodexMonitoriOSApp.swift"),
+    ]
+
+    for appSource in appSources {
+      let source = try String(contentsOf: appSource, encoding: .utf8)
+      XCTAssertTrue(source.contains("@Published private(set) var nextRefreshAt"))
+      XCTAssertTrue(source.contains("Next refresh \\(CodexRefreshText.remainingText"))
+      XCTAssertFalse(source.contains("\"Fetched \\(Self.fetchedAgoText"))
+    }
+  }
+
   func testWidgetUsesMinuteOnlyRefreshTextUntilFinalMinute() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let repositoryRoot = testFile
@@ -131,11 +162,14 @@ final class CodexUsageCoreTests: XCTestCase {
       .appendingPathComponent("Sources/CodexMonitorWidget/CodexMonitorWidget.swift")
     let source = try String(contentsOf: widgetSource, encoding: .utf8)
 
-    XCTAssertTrue(source.contains("TimelineView(.periodic(from: entry.date.addingTimeInterval(1), by: 60))"))
-    XCTAssertTrue(source.contains("nextRefreshLabel(for: entry.nextRefreshAt, now: context.date)"))
+    XCTAssertTrue(source.contains("return Timeline(entries: countdownEntries(from: entry), policy: .after(entry.nextRefreshAt))"))
+    XCTAssertTrue(source.contains("private func countdownEntries(from entry: CodexUsageEntry) -> [CodexUsageEntry]"))
+    XCTAssertTrue(source.contains("entry.nextRefreshAt.addingTimeInterval(-59)"))
+    XCTAssertTrue(source.contains("nextRefreshLabel(for: entry.nextRefreshAt, now: entry.date)"))
     XCTAssertTrue(source.contains("if remaining < 60"))
     XCTAssertTrue(source.contains("Text(date, style: .timer)"))
     XCTAssertTrue(source.contains("Text(nextRefreshMinuteText(for: date, now: now))"))
+    XCTAssertFalse(source.contains("TimelineView(.periodic"))
     XCTAssertFalse(source.contains("Text(date, style: .relative)"))
   }
 

@@ -84,7 +84,7 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
     -> Timeline<CodexUsageEntry>
   {
     let entry = await loadEntry(providerID: configuration.providerID, refreshFromAPI: true)
-    return Timeline(entries: [entry], policy: .after(entry.nextRefreshAt))
+    return Timeline(entries: countdownEntries(from: entry), policy: .after(entry.nextRefreshAt))
   }
 
   private func loadEntry(providerID: CodexUsageProviderID, refreshFromAPI: Bool) async
@@ -105,6 +105,33 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
       nextRefreshAt: settings.nextRefreshDate(after: date),
       providerID: providerID,
       snapshots: cachedSnapshot(providerID: providerID).map { [$0] } ?? []
+    )
+  }
+
+  private func countdownEntries(from entry: CodexUsageEntry) -> [CodexUsageEntry] {
+    guard entry.nextRefreshAt > entry.date else {
+      return [entry]
+    }
+
+    var entries = [entry]
+    let finalMinuteDate = entry.nextRefreshAt.addingTimeInterval(-59)
+    var nextDate = entry.date.addingTimeInterval(60)
+    while nextDate < finalMinuteDate {
+      entries.append(copy(entry, date: nextDate))
+      nextDate = nextDate.addingTimeInterval(60)
+    }
+    if finalMinuteDate > entry.date {
+      entries.append(copy(entry, date: finalMinuteDate))
+    }
+    return entries
+  }
+
+  private func copy(_ entry: CodexUsageEntry, date: Date) -> CodexUsageEntry {
+    CodexUsageEntry(
+      date: date,
+      nextRefreshAt: entry.nextRefreshAt,
+      providerID: entry.providerID,
+      snapshots: entry.snapshots
     )
   }
 
@@ -173,13 +200,11 @@ struct CodexMonitorWidgetView: View {
           .allowsTightening(true)
           .layoutPriority(1)
         Spacer(minLength: 4)
-        TimelineView(.periodic(from: entry.date.addingTimeInterval(1), by: 60)) { context in
-          Self.nextRefreshLabel(for: entry.nextRefreshAt, now: context.date)
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-        }
+        Self.nextRefreshLabel(for: entry.nextRefreshAt, now: entry.date)
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
       }
 
       if let snapshot = entry.snapshots.first {

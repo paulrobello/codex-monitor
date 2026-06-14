@@ -81,6 +81,7 @@ final class UsageStore: ObservableObject {
   @Published private(set) var hasOpenRouterAPIKey = false
   @Published var errorMessage: String?
   @Published private(set) var settings: CodexMonitorSettings
+  @Published private(set) var nextRefreshAt: Date?
 
   private let authStore = CodexAuthStore()
   private let openRouterAPIKeyStore = OpenRouterAPIKeyStore()
@@ -160,6 +161,7 @@ final class UsageStore: ObservableObject {
       )
       try cache.save(snapshots: nextSnapshots)
       snapshots = nextSnapshots
+      nextRefreshAt = settings.nextRefreshDate(after: Date())
       isCodexSignedIn = authStore.hasCredentials()
       hasOpenRouterAPIKey = openRouterAPIKeyStore.hasAPIKey()
       WidgetCenter.shared.reloadAllTimelines()
@@ -208,6 +210,7 @@ final class UsageStore: ObservableObject {
     do {
       try settingsStore.save(nextSettings)
       settings = nextSettings
+      nextRefreshAt = nextSettings.nextRefreshDate(after: Date())
       WidgetCenter.shared.reloadAllTimelines()
       restartRefreshLoop(runImmediately: false)
     } catch {
@@ -289,12 +292,15 @@ struct ContentView: View {
           Text("Codex Usage")
             .font(.title2)
             .fontWeight(.semibold)
-          Text(
-            store.snapshots.first.map {
-              "Fetched \(Self.fetchedAgoText(for: $0.fetchedAt))"
-            } ?? "No cached snapshot"
-          )
-          .foregroundStyle(.secondary)
+          if let nextRefreshAt = store.nextRefreshAt {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+              Text("Next refresh \(CodexRefreshText.remainingText(until: nextRefreshAt, now: context.date))")
+            }
+            .foregroundStyle(.secondary)
+          } else {
+            Text("No cached snapshot")
+              .foregroundStyle(.secondary)
+          }
         }
         Spacer()
         if store.shouldShowCodexSignIn {
@@ -341,19 +347,6 @@ struct ContentView: View {
     .padding(24)
   }
 
-  private static let relativeDateFormatter: RelativeDateTimeFormatter = {
-    let formatter = RelativeDateTimeFormatter()
-    formatter.unitsStyle = .full
-    return formatter
-  }()
-
-  private static func fetchedAgoText(for date: Date, now: Date = Date()) -> String {
-    guard date < now else {
-      return "0 seconds ago"
-    }
-    let fetchedAt = min(date, now)
-    return relativeDateFormatter.localizedString(for: fetchedAt, relativeTo: now)
-  }
 }
 
 struct SettingsView: View {

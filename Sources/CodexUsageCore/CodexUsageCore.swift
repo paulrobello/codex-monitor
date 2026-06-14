@@ -1333,6 +1333,27 @@ public enum CodexResetText {
   }
 }
 
+public enum CodexRefreshText {
+  public static func remainingText(until refreshAt: Date, now: Date = Date()) -> String {
+    let seconds = Int(refreshAt.timeIntervalSince(now).rounded(.up))
+    guard seconds > 0 else {
+      return "now"
+    }
+    if seconds < 60 {
+      return "in \(seconds)s"
+    }
+
+    let totalMinutes = max(1, Int(ceil(Double(seconds) / 60)))
+    let hours = totalMinutes / 60
+    let remainingMinutes = totalMinutes % 60
+
+    if hours > 0 {
+      return remainingMinutes > 0 ? "in \(hours)h \(remainingMinutes)m" : "in \(hours)h"
+    }
+    return "in \(remainingMinutes)m"
+  }
+}
+
 public final class CodexUsageCache {
   private let fileManager: FileManager
   public let cacheURL: URL

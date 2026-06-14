@@ -31,6 +31,7 @@ final class iOSUsageStore: ObservableObject {
   @Published private(set) var hasOpenRouterAPIKey = false
   @Published var errorMessage: String?
   @Published private(set) var settings: CodexMonitorSettings
+  @Published private(set) var nextRefreshAt: Date?
   @Published var deviceLogin: CodexDeviceCodeLogin?
   @Published private(set) var isDeviceLoginPolling = false
 
@@ -84,6 +85,7 @@ final class iOSUsageStore: ObservableObject {
       )
       try cache.save(snapshots: nextSnapshots)
       snapshots = nextSnapshots
+      nextRefreshAt = settings.nextRefreshDate(after: Date())
       isCodexSignedIn = authStore.hasCredentials()
       hasOpenRouterAPIKey = openRouterAPIKeyStore.hasAPIKey()
       WidgetCenter.shared.reloadAllTimelines()
@@ -149,6 +151,7 @@ final class iOSUsageStore: ObservableObject {
     do {
       try settingsStore.save(nextSettings)
       settings = nextSettings
+      nextRefreshAt = nextSettings.nextRefreshDate(after: Date())
       WidgetCenter.shared.reloadAllTimelines()
       restartRefreshLoop(runImmediately: false)
     } catch {
@@ -300,7 +303,11 @@ struct iOSContentView: View {
         Section {
           if !store.snapshots.isEmpty {
             ForEach(store.snapshots, id: \.provider) { snapshot in
-              iOSUsageSummaryView(snapshot: snapshot, showProviderName: true)
+              iOSUsageSummaryView(
+                snapshot: snapshot,
+                nextRefreshAt: store.nextRefreshAt,
+                showProviderName: true
+              )
             }
           } else {
             ContentUnavailableView(
@@ -455,6 +462,7 @@ struct iOSContentView: View {
 
 struct iOSUsageSummaryView: View {
   var snapshot: CodexUsageSnapshot
+  var nextRefreshAt: Date?
   var showProviderName = false
 
   var body: some View {
@@ -463,11 +471,13 @@ struct iOSUsageSummaryView: View {
         Text(snapshot.displayName)
           .font(.headline)
       }
-      Text(
-        "Fetched \(Self.fetchedAgoText(for: snapshot.fetchedAt))"
-      )
-      .font(.subheadline)
-      .foregroundStyle(.secondary)
+      if let nextRefreshAt {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+          Text("Next refresh \(CodexRefreshText.remainingText(until: nextRefreshAt, now: context.date))")
+        }
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+      }
 
       if let fiveHour = snapshot.fiveHour {
         iOSUsageWindowView(window: fiveHour)
@@ -479,19 +489,6 @@ struct iOSUsageSummaryView: View {
     .padding(.vertical, 4)
   }
 
-  private static let relativeDateFormatter: RelativeDateTimeFormatter = {
-    let formatter = RelativeDateTimeFormatter()
-    formatter.unitsStyle = .full
-    return formatter
-  }()
-
-  private static func fetchedAgoText(for date: Date, now: Date = Date()) -> String {
-    guard date < now else {
-      return "0 seconds ago"
-    }
-    let fetchedAt = min(date, now)
-    return relativeDateFormatter.localizedString(for: fetchedAt, relativeTo: now)
-  }
 }
 
 struct iOSUsageWindowView: View {
