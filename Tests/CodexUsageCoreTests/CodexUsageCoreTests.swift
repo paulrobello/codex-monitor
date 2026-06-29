@@ -225,6 +225,30 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertFalse(cliSource.contains("try cache.save(snapshot: snapshot)"))
   }
 
+  func testCLIProvidersCommandManagesEnabledProviders() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let cliSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent("Sources/CodexUsageCLI/main.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(cliSource.contains("case \"providers\":"))
+    XCTAssertTrue(cliSource.contains("CodexUsageProviderID(rawValue: rawProvider)"))
+    XCTAssertTrue(cliSource.contains("settings.refreshIntervalMinutes"))
+    XCTAssertTrue(cliSource.contains("let nextSettings = CodexMonitorSettings("))
+    XCTAssertTrue(cliSource.contains("enabledProviders: providers"))
+    XCTAssertTrue(cliSource.contains("try settingsStore.save(nextSettings)"))
+    XCTAssertTrue(
+      cliSource.contains(
+        "usage: codex-usage [login|refresh|print|cache-path|clear-auth|interval [minutes]|providers [provider ...]]"
+      )
+    )
+  }
+
   func testCLITargetDoesNotRequireProvisionedKeychainEntitlement() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let repositoryRoot = testFile

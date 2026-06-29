@@ -51,8 +51,33 @@ struct CodexUsageCLI {
         } else {
           print("\(settingsStore.load().refreshIntervalMinutes)")
         }
+      case "providers":
+        let settings = settingsStore.load()
+        let rawProviders = Array(arguments.dropFirst())
+        if rawProviders.isEmpty {
+          print(settings.enabledProviders.map(\.rawValue).joined(separator: ","))
+        } else {
+          let providers = rawProviders.map { rawProvider -> CodexUsageProviderID in
+            guard let provider = CodexUsageProviderID(rawValue: rawProvider) else {
+              eprint(
+                "Unknown provider '\(rawProvider)'. Use one of: "
+                  + CodexUsageProviderID.allCases.map(\.rawValue).joined(separator: ", ")
+              )
+              exit(2)
+            }
+            return provider
+          }
+          let nextSettings = CodexMonitorSettings(
+            refreshIntervalMinutes: settings.refreshIntervalMinutes,
+            enabledProviders: providers
+          )
+          try settingsStore.save(nextSettings)
+          print(nextSettings.enabledProviders.map(\.rawValue).joined(separator: ","))
+        }
       default:
-        eprint("usage: codex-usage [login|refresh|print|cache-path|clear-auth|interval [minutes]]")
+        eprint(
+          "usage: codex-usage [login|refresh|print|cache-path|clear-auth|interval [minutes]|providers [provider ...]]"
+        )
         exit(2)
       }
     } catch {
