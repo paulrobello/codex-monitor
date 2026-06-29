@@ -205,6 +205,67 @@ final class CodexUsageCoreTests: XCTestCase {
     }
   }
 
+  func testCLIRefreshUsesEnabledProviderClientAndSavesAllSnapshots() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let cliSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent("Sources/CodexUsageCLI/main.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(cliSource.contains("UsageProviderClient().fetchUsage"))
+    XCTAssertTrue(cliSource.contains("CodexKeychainAuthStore(accessGroup: \"\")"))
+    XCTAssertTrue(cliSource.contains("OpenRouterAPIKeyStore(accessGroup: \"\")"))
+    XCTAssertTrue(cliSource.contains("settings: settingsStore.load()"))
+    XCTAssertTrue(cliSource.contains("try cache.save(snapshots: snapshots)"))
+    XCTAssertTrue(cliSource.contains("try cache.loadSnapshots()"))
+    XCTAssertFalse(cliSource.contains("try cache.save(snapshot: snapshot)"))
+  }
+
+  func testCLITargetDoesNotRequireProvisionedKeychainEntitlement() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let project = try String(
+      contentsOf: repositoryRoot.appendingPathComponent("project.yml"),
+      encoding: .utf8
+    )
+    let cliTarget = try XCTUnwrap(project.range(of: "  CodexUsageCLI:"))
+    let nextTarget = try XCTUnwrap(
+      project.range(of: "\n  CodexMonitor:", range: cliTarget.upperBound..<project.endIndex)
+    )
+    let cliSettings = String(project[cliTarget.lowerBound..<nextTarget.lowerBound])
+
+    XCTAssertFalse(cliSettings.contains("CODE_SIGN_ENTITLEMENTS"))
+    XCTAssertFalse(
+      FileManager.default.fileExists(
+        atPath: repositoryRoot
+          .appendingPathComponent("Sources/CodexUsageCLI/CodexUsageCLI.entitlements")
+          .path
+      )
+    )
+  }
+
+  func testKeychainStoresCanOmitAccessGroupForUnprovisionedCLI() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let coreSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent("Sources/CodexUsageCore/CodexUsageCore.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(coreSource.contains("if !accessGroup.isEmpty"))
+    XCTAssertTrue(coreSource.contains("query[kSecAttrAccessGroup as String] = accessGroup"))
+  }
+
   func testPersistsSettings() throws {
     let url = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)

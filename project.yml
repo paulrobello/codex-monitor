@@ -40,7 +40,6 @@ targets:
       - target: CodexUsageCore
     settings:
       base:
-        CODE_SIGN_ENTITLEMENTS: Sources/CodexUsageCLI/CodexUsageCLI.entitlements
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
         PRODUCT_NAME: codex-usage
   CodexMonitor:

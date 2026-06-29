@@ -7,7 +7,10 @@ struct CodexUsageCLI {
   static func main() async {
     let arguments = Array(CommandLine.arguments.dropFirst())
     let command = arguments.first ?? "refresh"
-    let authStore = CodexAuthStore()
+    let authStore = CodexAuthStore(
+      secureStore: CodexKeychainAuthStore(accessGroup: "")
+    )
+    let openRouterAPIKeyStore = OpenRouterAPIKeyStore(accessGroup: "")
     let cache = CodexUsageCache()
     let settingsStore = CodexSettingsStore()
 
@@ -19,13 +22,18 @@ struct CodexUsageCLI {
           credentials.accountId.map { "Signed in to Codex account \($0)." } ?? "Signed in to Codex."
         )
       case "refresh":
-        let snapshot = try await CodexUsageClient().fetchUsage(authStore: authStore)
-        try cache.save(snapshot: snapshot)
-        print(String(data: try JSONEncoder.codexMonitor.encode(snapshot), encoding: .utf8) ?? "{}")
+        let snapshots = try await UsageProviderClient().fetchUsage(
+          settings: settingsStore.load(),
+          codexAuthStore: authStore,
+          openRouterAPIKeyStore: openRouterAPIKeyStore
+        )
+        try cache.save(snapshots: snapshots)
+        print(String(data: try JSONEncoder.codexMonitor.encode(snapshots), encoding: .utf8) ?? "[]")
       case "print":
-        if let snapshot = try cache.loadSnapshot() {
+        let snapshots = try cache.loadSnapshots()
+        if !snapshots.isEmpty {
           print(
-            String(data: try JSONEncoder.codexMonitor.encode(snapshot), encoding: .utf8) ?? "{}")
+            String(data: try JSONEncoder.codexMonitor.encode(snapshots), encoding: .utf8) ?? "[]")
         } else {
           eprint("No cached Codex usage snapshot at \(cache.cacheURL.path).")
           exit(1)

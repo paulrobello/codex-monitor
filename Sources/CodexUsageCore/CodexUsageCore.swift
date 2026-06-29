@@ -220,12 +220,15 @@ public final class CodexKeychainAuthStore: CodexSecureAuthStoring, @unchecked Se
   }
 
   private func baseQuery() -> [String: Any] {
-    [
+    var query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
       kSecAttrAccount as String: account,
-      kSecAttrAccessGroup as String: accessGroup,
     ]
+    if !accessGroup.isEmpty {
+      query[kSecAttrAccessGroup as String] = accessGroup
+    }
+    return query
   }
 }
 
@@ -318,12 +321,15 @@ public final class OpenRouterAPIKeyStore: @unchecked Sendable {
   }
 
   private func baseQuery() -> [String: Any] {
-    [
+    var query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
       kSecAttrAccount as String: account,
-      kSecAttrAccessGroup as String: accessGroup,
     ]
+    if !accessGroup.isEmpty {
+      query[kSecAttrAccessGroup as String] = accessGroup
+    }
+    return query
   }
 
   private func nonEmpty(_ value: String?) -> String? {
