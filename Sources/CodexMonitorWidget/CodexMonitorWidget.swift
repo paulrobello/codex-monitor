@@ -186,15 +186,13 @@ struct CodexMonitorWidgetView: View {
   var entry: CodexUsageEntry
 
   var body: some View {
-    VStack(alignment: .leading, spacing: family == .systemSmall ? 7 : 8) {
-      HStack(spacing: 7) {
+    VStack(alignment: .leading, spacing: family == .systemSmall ? 6 : 7) {
+      HStack(spacing: 6) {
         Image(systemName: "gauge.with.dots.needle.bottom.50percent")
-          .font(.system(size: family == .systemSmall ? 14 : 16, weight: .semibold))
+          .font(.system(size: family == .systemSmall ? 12 : 13, weight: .semibold))
           .foregroundStyle(.secondary)
         Text(entry.providerID.displayName)
-          .font(
-            family == .systemSmall ? .subheadline.weight(.semibold) : .headline.weight(.semibold)
-          )
+          .font(.caption.weight(.semibold))
           .lineLimit(1)
           .minimumScaleFactor(0.75)
           .allowsTightening(true)
@@ -222,8 +220,8 @@ struct CodexMonitorWidgetView: View {
         Spacer()
       }
     }
-    .padding(.horizontal, family == .systemSmall ? 14 : 20)
-    .padding(.vertical, family == .systemSmall ? 14 : 18)
+    .padding(.horizontal, family == .systemSmall ? 34 : 36)
+    .padding(.vertical, family == .systemSmall ? 24 : 26)
     .containerBackground(.background, for: .widget)
   }
 
@@ -259,10 +257,10 @@ struct WidgetUsageRow: View {
   var window: CodexUsageWindow
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 3) {
+    VStack(alignment: .leading, spacing: 2) {
       HStack {
         Text(displayLabel)
-          .font(.caption)
+          .font(.caption2)
           .foregroundStyle(.secondary)
         Spacer()
         remainingLabel
@@ -273,6 +271,9 @@ struct WidgetUsageRow: View {
       Text(resetText)
         .font(.caption2)
         .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.85)
+        .allowsTightening(true)
     }
   }
 
@@ -315,12 +316,12 @@ struct WidgetUsageRow: View {
         Text("\(Int(window.remainingPercent.rounded()))")
           .monospacedDigit()
         Text("%")
-          .font(.system(.callout, design: .rounded).weight(.semibold))
+          .font(.system(.caption2, design: .rounded).weight(.semibold))
       }
     }
-    .font(.system(.body, design: .rounded).weight(.semibold))
+    .font(.system(.caption, design: .rounded).weight(.semibold))
     .foregroundStyle(tint)
-    .frame(minWidth: 46, alignment: .trailing)
+    .frame(minWidth: 34, alignment: .trailing)
     .lineLimit(1)
     .fixedSize(horizontal: true, vertical: false)
   }
@@ -354,7 +355,7 @@ struct UsageProgressBar: View {
           .widgetAccentable()
       }
     }
-    .frame(height: 6)
+    .frame(height: 5)
   }
 }
 
