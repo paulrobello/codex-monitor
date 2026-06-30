@@ -220,8 +220,8 @@ struct CodexMonitorWidgetView: View {
         Spacer()
       }
     }
-    .padding(.horizontal, family == .systemSmall ? 34 : 36)
-    .padding(.vertical, family == .systemSmall ? 24 : 26)
+    .padding(.horizontal, family == .systemSmall ? 14 : 20)
+    .padding(.vertical, family == .systemSmall ? 14 : 18)
     .containerBackground(.background, for: .widget)
   }
 
