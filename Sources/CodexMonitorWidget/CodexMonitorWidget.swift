@@ -260,7 +260,7 @@ struct WidgetUsageRow: View {
     VStack(alignment: .leading, spacing: 2) {
       HStack {
         Text(displayLabel)
-          .font(.caption2)
+          .font(.system(size: 10, weight: .semibold))
           .foregroundStyle(.secondary)
         Spacer()
         remainingLabel
@@ -269,7 +269,7 @@ struct WidgetUsageRow: View {
         UsageProgressBar(value: window.remainingPercent, tint: tint)
       }
       Text(resetText)
-        .font(.caption2)
+        .font(.system(size: 10, weight: .semibold))
         .foregroundStyle(.secondary)
         .lineLimit(1)
         .minimumScaleFactor(0.85)
@@ -316,12 +316,12 @@ struct WidgetUsageRow: View {
         Text("\(Int(window.remainingPercent.rounded()))")
           .monospacedDigit()
         Text("%")
-          .font(.system(.caption2, design: .rounded).weight(.semibold))
+          .font(.system(size: 10, weight: .semibold, design: .rounded))
       }
     }
-    .font(.system(.caption, design: .rounded).weight(.semibold))
+    .font(.system(size: 11, weight: .semibold, design: .rounded))
     .foregroundStyle(tint)
-    .frame(minWidth: 34, alignment: .trailing)
+    .frame(minWidth: 30, alignment: .trailing)
     .lineLimit(1)
     .fixedSize(horizontal: true, vertical: false)
   }

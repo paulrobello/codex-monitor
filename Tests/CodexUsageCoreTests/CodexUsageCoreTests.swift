@@ -198,7 +198,8 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains(".padding(.horizontal, family == .systemSmall ? 14 : 20)"))
     XCTAssertTrue(widgetSource.contains(".padding(.vertical, family == .systemSmall ? 14 : 18)"))
     XCTAssertTrue(widgetSource.contains("VStack(alignment: .leading, spacing: family == .systemSmall ? 6 : 7)"))
-    XCTAssertTrue(widgetSource.contains(".font(.system(.caption, design: .rounded).weight(.semibold))"))
+    XCTAssertTrue(widgetSource.contains(".font(.system(size: 10, weight: .semibold))"))
+    XCTAssertTrue(widgetSource.contains(".font(.system(size: 11, weight: .semibold, design: .rounded))"))
     XCTAssertTrue(widgetSource.contains(".frame(height: 5)"))
     XCTAssertFalse(widgetSource.contains("ProgressView(value: window.remainingPercent, total: 100)"))
 
