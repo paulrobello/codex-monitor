@@ -198,8 +198,29 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(payload.cards[0].title, "CODEX")
     XCTAssertEqual(payload.cards[0].kind, .meter)
     XCTAssertEqual(payload.cards[0].accentColor, BeaconRGB(red: 191, green: 90, blue: 242))
+    XCTAssertEqual(payload.cards[0].accentColor.hexString, "#BF5AF2")
+    XCTAssertEqual(payload.cards[0].updatedAt, now)
+    XCTAssertEqual(payload.cards[0].value, 88)
+    XCTAssertEqual(payload.cards[0].unit, "%")
+    XCTAssertEqual(payload.cards[0].primaryMetric, "5H 88%")
+    XCTAssertEqual(payload.cards[0].secondaryMetric, "WEEKLY 89%")
+    XCTAssertEqual(payload.cards[0].details?.primaryProgressPercent, 88)
+    XCTAssertEqual(payload.cards[0].details?.secondaryProgressPercent, 89)
     XCTAssertEqual(payload.cards[0].progressPercent, 88)
     XCTAssertEqual(payload.cards[0].secondaryProgressPercent, 89)
+
+    let encoded = try Self.jsonObject(from: JSONEncoder.codexMonitor.encode(payload))
+    let cards = try XCTUnwrap(encoded["cards"] as? [[String: Any]])
+    let card = try XCTUnwrap(cards.first)
+    XCTAssertEqual(card["type"] as? String, "progress")
+    XCTAssertNil(card["kind"])
+    XCTAssertEqual(card["accent_color"] as? String, "#BF5AF2")
+    XCTAssertEqual(card["value"] as? Int, 88)
+    XCTAssertEqual(card["unit"] as? String, "%")
+    XCTAssertNotNil(card["updated_at"] as? String)
+    let details = try XCTUnwrap(card["details"] as? [String: Any])
+    XCTAssertEqual(details["primary_progress_percent"] as? Int, 88)
+    XCTAssertEqual(details["secondary_progress_percent"] as? Int, 89)
   }
 
   func testBuildsBeaconCardsWithProviderColorOverride() throws {
@@ -335,7 +356,75 @@ final class CodexUsageCoreTests: XCTestCase {
     )
 
     XCTAssertEqual(response.statusCode, 200)
-    XCTAssertTrue(String(data: response.body, encoding: .utf8)?.contains("\"cards\"") == true)
+    let body = try Self.jsonObject(from: response.body)
+    let cards = try XCTUnwrap(body["cards"] as? [[String: Any]])
+    let card = try XCTUnwrap(cards.first)
+    XCTAssertEqual(card["type"] as? String, "progress")
+    XCTAssertEqual(card["accent_color"] as? String, "#BF5AF2")
+    XCTAssertNotNil(card["updated_at"] as? String)
+    XCTAssertNil(card["kind"])
+  }
+
+  func testBeaconHTTPHandlerReturnsFirmwareContractRoutesWithValidAPIKey() async throws {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let cache = CodexUsageCache(cacheURL: directory.appendingPathComponent("usage.json"))
+    try cache.save(snapshots: [
+      CodexUsageSnapshot(
+        provider: CodexUsageProviderID.openAICodex.rawValue,
+        fetchedAt: now,
+        fiveHour: CodexUsageWindow(label: "5h", remainingPercent: 88, resetAt: now.addingTimeInterval(3600)),
+        weekly: nil
+      )
+    ])
+    let service = CodexMonitorCollectionService(
+      settingsStore: CodexSettingsStore(settingsURL: directory.appendingPathComponent("settings.json")),
+      cache: cache,
+      fetcher: StubUsageFetcher(snapshots: []),
+      codexAuthStore: CodexAuthStore(environment: [:], secureStore: MemorySecureAuthStore(), legacyMonitorAuthFileURLs: []),
+      openRouterAPIKeyStore: OpenRouterAPIKeyStore(service: "test", account: "test", accessGroup: "")
+    )
+    let handler = BeaconHTTPRequestHandler(
+      service: service,
+      apiKeyValidator: MemoryBeaconAPIKeyStore(apiKey: "secret"),
+      now: { now }
+    )
+    let headers = ["authorization": "Bearer secret"]
+
+    let apiInfo = await handler.handle(method: "GET", path: "/api/v1", headers: headers, body: Data())
+    XCTAssertEqual(apiInfo.statusCode, 200)
+    let apiInfoBody = try Self.jsonObject(from: apiInfo.body)
+    XCTAssertEqual(apiInfoBody["firmware_contract_version"] as? String, "2026-06-29")
+    XCTAssertEqual(apiInfoBody["card_endpoint"] as? String, "/api/v1/cards")
+    XCTAssertEqual(apiInfoBody["refresh_endpoint"] as? String, "/api/v1/refresh")
+
+    let contracts = await handler.handle(method: "GET", path: "/api/v1/contracts", headers: headers, body: Data())
+    XCTAssertEqual(contracts.statusCode, 200)
+    let contractBody = try Self.jsonObject(from: contracts.body)
+    let schemas = try XCTUnwrap(contractBody["schemas"] as? [[String: Any]])
+    let examples = try XCTUnwrap(contractBody["examples"] as? [[String: Any]])
+    XCTAssertTrue(schemas.contains { $0["name"] as? String == "beacon-payload.schema.json" })
+    XCTAssertTrue(examples.contains { $0["endpoint"] as? String == "/api/v1/examples/overview-payload.json" })
+
+    let device = await handler.handle(
+      method: "GET",
+      path: "/api/v1/device/beacon-dev",
+      headers: headers,
+      body: Data()
+    )
+    XCTAssertEqual(device.statusCode, 200)
+    let deviceBody = try Self.jsonObject(from: device.body)
+    XCTAssertEqual(deviceBody["device_id"] as? String, "beacon-dev")
+    XCTAssertEqual(deviceBody["status"] as? String, "registered")
+    XCTAssertEqual(deviceBody["firmware_contract_version"] as? String, "2026-06-29")
+
+    let status = await handler.handle(method: "GET", path: "/api/v1/status", headers: headers, body: Data())
+    XCTAssertEqual(status.statusCode, 200)
+    let statusBody = try Self.jsonObject(from: status.body)
+    XCTAssertEqual(statusBody["device_id"] as? String, "beacon-dev")
+    XCTAssertEqual(statusBody["card_count"] as? Int, 1)
+    XCTAssertNotNil(statusBody["refresh_message"])
+    XCTAssertNotNil(statusBody["providers"] as? [[String: Any]])
   }
 
   func testServiceBeaconPayloadUsesSavedProviderColors() async throws {
@@ -721,6 +810,8 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(makefile.contains("install-service: install"))
     XCTAssertTrue(makefile.contains("uninstall-service:"))
     XCTAssertTrue(makefile.contains("INSTALLED_APP_EXECUTABLE"))
+    XCTAssertTrue(makefile.contains("SERVICE_APP_BUNDLE"))
+    XCTAssertTrue(makefile.contains("INSTALLED_SERVICE_LOGIN_ITEM"))
     XCTAssertTrue(makefile.contains("--register-service"))
     XCTAssertTrue(makefile.contains("--unregister-service"))
   }
@@ -977,6 +1068,10 @@ final class CodexUsageCoreTests: XCTestCase {
     """
     {"type":"assistant","uuid":"\(uuid)","timestamp":"\(timestamp)","message":{"role":"assistant","model":"claude-opus-4-8","usage":{"input_tokens":\(input),"output_tokens":\(output),"cache_creation_input_tokens":\(cacheCreation),"cache_read_input_tokens":\(cacheRead),"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0}}}}
     """
+  }
+
+  private static func jsonObject(from data: Data) throws -> [String: Any] {
+    try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
   }
 
   private static func unusedLocalPort() throws -> UInt16 {

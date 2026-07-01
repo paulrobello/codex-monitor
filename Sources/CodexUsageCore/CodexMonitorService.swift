@@ -56,6 +56,7 @@ public actor CodexMonitorCollectionService {
   private let codexAuthStore: CodexAuthStore
   private let openRouterAPIKeyStore: OpenRouterAPIKeyStore
   private var lastRefreshAt: Date?
+  private var lastRefreshStartedAt: Date?
   private var refreshCount = 0
   private var refreshState: CodexMonitorRefreshState = .idle
   private var refreshMessage = "Idle"
@@ -75,6 +76,7 @@ public actor CodexMonitorCollectionService {
   }
 
   public func refreshNow() async throws -> [CodexUsageSnapshot] {
+    lastRefreshStartedAt = Date()
     refreshState = .updating
     refreshMessage = "Refresh in progress"
     do {
@@ -127,5 +129,49 @@ public actor CodexMonitorCollectionService {
       refreshCount: refreshCount,
       providerCount: (try? cache.loadSnapshots().count) ?? 0
     )
+  }
+
+  public func beaconStatus(deviceID: String = "beacon-dev", now: Date = Date()) -> BeaconAPIStatus {
+    let settings = settingsStore.load()
+    let snapshots = (try? cache.loadSnapshots()) ?? []
+    let providers = snapshots.map { snapshot in
+      BeaconProviderStatus(
+        provider: snapshot.provider,
+        status: .healthy,
+        cardCount: 1,
+        updatedAt: snapshot.fetchedAt
+      )
+    }
+    let status = beaconStatus(from: refreshState, hasCards: !snapshots.isEmpty)
+    return BeaconAPIStatus(
+      deviceID: deviceID,
+      generatedAt: now,
+      lastRefreshAt: lastRefreshAt,
+      nextRefreshAt: lastRefreshAt.map { settings.nextRefreshDate(after: $0) },
+      refreshIntervalSeconds: Int(settings.refreshIntervalSeconds),
+      refreshStatus: beaconStatus(from: refreshState, hasCards: !snapshots.isEmpty),
+      refreshMessage: refreshMessage,
+      refreshStartedAt: lastRefreshStartedAt,
+      refreshCompletedAt: lastRefreshAt,
+      refreshCount: refreshCount,
+      status: status,
+      cardCount: snapshots.count,
+      providers: providers
+    )
+  }
+
+  private func beaconStatus(from state: CodexMonitorRefreshState, hasCards: Bool) -> BeaconCardStatus {
+    switch state {
+    case .idle:
+      return hasCards ? .healthy : .idle
+    case .updating:
+      return .updating
+    case .healthy:
+      return hasCards ? .healthy : .warning
+    case .warning:
+      return .warning
+    case .error:
+      return .error
+    }
   }
 }

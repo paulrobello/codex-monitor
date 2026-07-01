@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt typecheck checkall generate install install-service uninstall-service install-phone launch-phone run refresh clean
+.PHONY: build test lint fmt typecheck checkall generate install install-service restart-service uninstall-service install-phone launch-phone run refresh clean
 
 PROJECT := CodexMonitor.xcodeproj
 SCHEME := CodexMonitor
@@ -8,16 +8,20 @@ BUILD_DIR := build
 DERIVED_DATA := build/DerivedData
 XCODEBUILD_FLAGS := -allowProvisioningUpdates
 APP_NAME := CodexMonitor
+SERVICE_PROCESS := net.pardev.CodexMonitor.Service
 WIDGET_EXTENSION_PROCESS := CodexMonitorWidgetExtension
 IOS_APP_NAME := CodexMonitoriOS
 IOS_BUNDLE_ID := net.pardev.CodexMonitor.iOS
 APP_BUNDLE_NAME := $(APP_NAME).app
+SERVICE_APP_BUNDLE_NAME := CodexMonitorService.app
 APP_BUNDLE := $(DERIVED_DATA)/Build/Products/$(CONFIGURATION)/$(APP_BUNDLE_NAME)
+SERVICE_APP_BUNDLE := $(DERIVED_DATA)/Build/Products/$(CONFIGURATION)/$(SERVICE_APP_BUNDLE_NAME)
 IOS_APP_BUNDLE := $(DERIVED_DATA)/Build/Products/$(CONFIGURATION)-iphoneos/$(IOS_APP_NAME).app
 APP_EXTENSION_PATH := Contents/PlugIns/CodexMonitorWidgetExtension.appex
 INSTALL_DIR ?= $(HOME)/Applications
 INSTALLED_APP_BUNDLE := $(INSTALL_DIR)/$(APP_BUNDLE_NAME)
 INSTALLED_APP_EXECUTABLE := $(INSTALLED_APP_BUNDLE)/Contents/MacOS/$(APP_NAME)
+INSTALLED_SERVICE_LOGIN_ITEM := $(INSTALLED_APP_BUNDLE)/Contents/Library/LoginItems/$(SERVICE_APP_BUNDLE_NAME)
 PHONE_DEVICE ?= Pauls iPhone 17
 PHONE_DESTINATION ?= platform=iOS,name=$(PHONE_DEVICE)
 LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
@@ -47,6 +51,9 @@ install: build
 	mkdir -p "$(INSTALL_DIR)"
 	rm -rf "$(INSTALLED_APP_BUNDLE)"
 	ditto "$(APP_BUNDLE)" "$(INSTALLED_APP_BUNDLE)"
+	rm -rf "$(INSTALLED_SERVICE_LOGIN_ITEM)"
+	mkdir -p "$(dir $(INSTALLED_SERVICE_LOGIN_ITEM))"
+	ditto "$(SERVICE_APP_BUNDLE)" "$(INSTALLED_SERVICE_LOGIN_ITEM)"
 	"$(LSREGISTER)" -u "$(abspath $(APP_BUNDLE))" >/dev/null 2>&1 || true
 	pluginkit -r "$(abspath $(APP_BUNDLE))/$(APP_EXTENSION_PATH)" >/dev/null 2>&1 || true
 	"$(LSREGISTER)" -f "$(INSTALLED_APP_BUNDLE)"
@@ -54,7 +61,10 @@ install: build
 	pkill -x "$(WIDGET_EXTENSION_PROCESS)" >/dev/null 2>&1 || true
 
 install-service: install
+	pkill -f "$(SERVICE_PROCESS)" >/dev/null 2>&1 || true
 	"$(INSTALLED_APP_EXECUTABLE)" --register-service
+
+restart-service: install-service
 
 uninstall-service:
 	@if [ ! -x "$(INSTALLED_APP_EXECUTABLE)" ]; then \

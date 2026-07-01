@@ -50,13 +50,31 @@ public struct BeaconHTTPRequestHandler: Sendable {
 
     do {
       switch (method, path) {
+      case ("GET", "/api/v1"):
+        return encodedJSON(statusCode: 200, BeaconAPIInfo())
+      case ("GET", "/api/v1/contracts"):
+        return encodedJSON(statusCode: 200, BeaconContractIndex())
       case ("GET", "/api/v1/cards"):
         return try await encodedJSON(
           statusCode: 200,
           service.beaconPayload(generatedAt: now())
         )
+      case ("GET", let providerPath) where providerPath.hasPrefix("/api/v1/cards/"):
+        let provider = String(providerPath.dropFirst("/api/v1/cards/".count))
+        let payload = try await service.beaconPayload(generatedAt: now())
+        return encodedJSON(
+          statusCode: 200,
+          BeaconPayload(
+            deviceID: payload.deviceID,
+            generatedAt: payload.generatedAt,
+            cards: payload.cards.filter { $0.provider == provider || $0.id == provider }
+          )
+        )
       case ("GET", "/api/v1/status"):
-        return await encodedJSON(statusCode: 200, service.status(now: now()))
+        return await encodedJSON(statusCode: 200, service.beaconStatus(now: now()))
+      case ("GET", let devicePath) where devicePath.hasPrefix("/api/v1/device/"):
+        let deviceID = String(devicePath.dropFirst("/api/v1/device/".count))
+        return encodedJSON(statusCode: 200, BeaconDeviceStatus(deviceID: deviceID))
       case ("POST", "/api/v1/refresh"):
         _ = try await service.refreshNow()
         return try await encodedJSON(
