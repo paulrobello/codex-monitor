@@ -8,6 +8,10 @@ struct CodexMonitoriOSApp: App {
   @StateObject private var store = iOSUsageStore()
   @Environment(\.scenePhase) private var scenePhase
 
+  init() {
+    loadRocketSimConnect()
+  }
+
   var body: some Scene {
     WindowGroup {
       iOSContentView(store: store)
@@ -18,8 +22,18 @@ struct CodexMonitoriOSApp: App {
           if phase == .active {
             store.resumeDeviceLoginIfNeeded()
           }
-        }
+      }
     }
+  }
+
+  private func loadRocketSimConnect() {
+    #if DEBUG
+    guard (Bundle(path: "/Applications/RocketSim.app/Contents/Frameworks/RocketSimConnectLinker.nocache.framework")?.load() == true) else {
+      print("Failed to load linker framework")
+      return
+    }
+    print("RocketSim Connect successfully linked")
+    #endif
   }
 }
 

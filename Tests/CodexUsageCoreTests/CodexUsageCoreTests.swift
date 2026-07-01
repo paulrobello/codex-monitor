@@ -660,6 +660,23 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertFalse(appSource.contains("NSRunningApplication.runningApplications"))
   }
 
+  func testIOSAppLoadsRocketSimConnectOnLaunch() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let appSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent(
+        "Sources/CodexMonitoriOS/CodexMonitoriOSApp.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(appSource.contains("init() {\n    loadRocketSimConnect()\n  }"))
+    XCTAssertTrue(appSource.contains("private func loadRocketSimConnect()"))
+    XCTAssertTrue(appSource.contains("RocketSimConnectLinker.nocache.framework"))
+  }
+
   func testUsageBarsUseAccentableCustomWidgetFillAndReloadOnAppStart() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let repositoryRoot = testFile
