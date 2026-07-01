@@ -40,11 +40,11 @@ Helper script: `script/build_and_run.sh` — kills existing app, installs, then 
 
 - **`Sources/CodexMonitoriOS/`** — iOS app (SwiftUI): device-code login UI, `NavigationStack` + `List` layout, monitors `scenePhase` to resume pending logins.
 
-- **`Sources/CodexMonitorWidget/`** — Shared WidgetKit extension: timeline provider fetches from API (falls back to cache), adapts layout per `widgetFamily`.
+- **`Sources/CodexMonitorWidget/`** — Shared WidgetKit extension: timeline provider reads the shared cache, filters it by enabled provider settings, adapts layout per `widgetFamily`.
 
 - **`Sources/CodexUsageCLI/main.swift`** — macOS CLI (`codex-usage`): commands `login`, `refresh`, `print`, `cache-path`, `clear-auth`, `interval`.
 
-- **`Tests/CodexUsageCoreTests/`** — 17 unit tests covering Codex/OpenRouter/Claude Code parsing, JWT extraction, auth flows, settings, cache migration, time formatting.
+- **`Tests/CodexUsageCoreTests/`** — Unit tests covering Codex/OpenRouter/Claude Code parsing, JWT extraction, auth flows, settings, cache migration, widgets, time formatting.
 
 ### Multi-Provider Architecture
 
@@ -56,13 +56,14 @@ Helper script: `script/build_and_run.sh` — kills existing app, installs, then 
 | **OpenRouter** | API key in Keychain (or `OPENROUTER_API_KEY` env) | API: `openrouter.ai/api/v1/key` + `/credits` | `openrouter` |
 | **Claude Code** | None (reads local files) | Local JSONL tails from `~/.claude/projects/` | `claude-code` |
 
-The cache stores an array of `CodexUsageSnapshot` (one per provider). Backward-compatible: reads legacy single-snapshot format.
+The cache stores an array of `CodexUsageSnapshot` (one per provider). Backward-compatible: reads legacy single-snapshot format. Display and local API surfaces must filter cached snapshots through `CodexMonitorSettings.enabledProviders` before rendering or reporting provider status.
 
 ### Key Patterns
 
 - **Credential lookup order (Codex):** env vars (`CODEX_MONITOR_ACCESS_TOKEN` / `CODEX_ACCESS_TOKEN`) → Keychain (`CodexKeychainAuthStore`) → legacy `auth.json` files (auto-migrated and deleted)
 - **OpenRouter key lookup:** env var `OPENROUTER_API_KEY` → Keychain (`OpenRouterAPIKeyStore`)
 - **Claude Code usage:** reads tails (last 2MB) of up to 12 most-recent `.jsonl` session files under `~/.claude/projects/`, extracts token counts from `type: "assistant"` records
+- **Enabled-provider filtering:** use `filteringDisabledProviders(settings:)` at cache read/display seams so disabled providers do not leak from stale cache entries
 - **App group:** `group.net.pardev.CodexMonitor` — shared between app and widget for cache/settings
 - **Keychain access group:** `QMLVG482FY.net.pardev.CodexMonitor`
 - **OAuth client ID:** `app_EMoamEEZ73f0CkXaXp7hrann`, auth via `https://auth.openai.com`

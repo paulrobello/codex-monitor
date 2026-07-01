@@ -40,6 +40,7 @@ make launch-phone PHONE_DEVICE="Your Device Name"  # Target a different device
 ## Features
 
 - **Multi-Provider Monitoring** — Track OpenAI Codex, OpenRouter, and Claude Code usage from a single app
+- **Provider Selection** — Enable only the providers you want; disabled providers stay hidden in the app, menu bar, widgets, and Beacon output
 - **Usage Windows** — Shows 5-hour and weekly Codex usage windows with remaining quota percentages
 - **Reset Countdowns** — Displays reset date/time plus time remaining until quota resets
 - **Progress Bars** — Visual indicators for usage consumption across all providers
@@ -58,7 +59,7 @@ make launch-phone PHONE_DEVICE="Your Device Name"  # Target a different device
 | **OpenRouter** | API key in Keychain (or `OPENROUTER_API_KEY` env) | API: `openrouter.ai/api/v1/key` + `/credits` | `openrouter` |
 | **Claude Code** | None (reads local files) | Local JSONL tails from `~/.claude/projects/` | `claude-code` |
 
-`UsageProviderClient` orchestrates fetching from all enabled providers. `CodexMonitorSettings.enabledProviders` controls which are active.
+`UsageProviderClient` orchestrates fetching from all enabled providers. `CodexMonitorSettings.enabledProviders` controls which are active. Cached snapshots are also filtered through the enabled-provider setting before display, so stale usage for a disabled provider does not appear in the app, menu bar, widgets, or Beacon API output.
 
 ## Gallery
 
@@ -118,8 +119,9 @@ The API is off by default. Enable it in Settings, enable the launch service, the
 configure Beacon firmware with the displayed LAN URL and generated API key. The
 `localhost` URL is only for curl checks running on the Mac itself.
 
-Widgets and the app read the shared cache directly. Beacon reads the same cache
-through the local HTTP API.
+Widgets and the app read the shared cache directly, filtered by the enabled
+provider list in settings. Beacon reads the same filtered cache through the
+local HTTP API.
 
 ## CLI
 
@@ -158,7 +160,7 @@ Sources/
 └── CodexUsageCLI/        macOS helper CLI (main.swift)
 
 Tests/
-└── CodexUsageCoreTests/  17 unit tests — parsing, JWT, auth, settings, cache
+└── CodexUsageCoreTests/  Unit tests — parsing, JWT, auth, settings, cache, widgets
 
 project.yml               XcodeGen project definition (9 targets)
 Makefile                  Build, test, install, and launch targets
