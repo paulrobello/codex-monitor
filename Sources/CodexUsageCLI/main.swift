@@ -52,7 +52,8 @@ struct CodexUsageCLI {
             refreshIntervalMinutes: minutes,
             enabledProviders: currentSettings.enabledProviders,
             beaconAPIEnabled: currentSettings.beaconAPIEnabled,
-            beaconAPIPort: currentSettings.beaconAPIPort
+            beaconAPIPort: currentSettings.beaconAPIPort,
+            beaconProviderColors: currentSettings.beaconProviderColors
           )
           try settingsStore.save(settings)
           print("Usage refresh interval set to \(settings.refreshIntervalMinutes) minutes.")
@@ -79,7 +80,8 @@ struct CodexUsageCLI {
             refreshIntervalMinutes: settings.refreshIntervalMinutes,
             enabledProviders: providers,
             beaconAPIEnabled: settings.beaconAPIEnabled,
-            beaconAPIPort: settings.beaconAPIPort
+            beaconAPIPort: settings.beaconAPIPort,
+            beaconProviderColors: settings.beaconProviderColors
           )
           try settingsStore.save(nextSettings)
           print(nextSettings.enabledProviders.map(\.rawValue).joined(separator: ","))
@@ -95,7 +97,8 @@ struct CodexUsageCLI {
             refreshIntervalMinutes: settings.refreshIntervalMinutes,
             enabledProviders: settings.enabledProviders,
             beaconAPIEnabled: enabled,
-            beaconAPIPort: settings.beaconAPIPort
+            beaconAPIPort: settings.beaconAPIPort,
+            beaconProviderColors: settings.beaconProviderColors
           )
           try settingsStore.save(nextSettings)
           print(enabled ? "on" : "off")

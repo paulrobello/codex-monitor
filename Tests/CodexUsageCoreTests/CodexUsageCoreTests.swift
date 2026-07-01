@@ -130,6 +130,22 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(CodexMonitorSettings(beaconAPIPort: 9000).beaconAPIPort, 9000)
   }
 
+  func testMonitorSettingsPersistBeaconProviderColors() throws {
+    let color = BeaconRGB(red: 12, green: 34, blue: 56)
+    let settings = CodexMonitorSettings(
+      beaconProviderColors: [
+        CodexUsageProviderID.openAICodex.rawValue: color
+      ]
+    )
+
+    let data = try JSONEncoder.codexMonitor.encode(settings)
+    let decoded = try JSONDecoder.codexMonitor.decode(CodexMonitorSettings.self, from: data)
+
+    XCTAssertEqual(decoded.beaconProviderColors[CodexUsageProviderID.openAICodex.rawValue], color)
+    XCTAssertEqual(decoded.beaconAccentColor(for: .openAICodex), color)
+    XCTAssertEqual(decoded.beaconAccentColor(for: .openRouter), CodexUsageProviderID.openRouter.beaconAccentColor)
+  }
+
   func testServiceStatusEncodesRefreshState() throws {
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     let status = CodexMonitorServiceStatus(
@@ -184,6 +200,27 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(payload.cards[0].accentColor, BeaconRGB(red: 191, green: 90, blue: 242))
     XCTAssertEqual(payload.cards[0].progressPercent, 88)
     XCTAssertEqual(payload.cards[0].secondaryProgressPercent, 89)
+  }
+
+  func testBuildsBeaconCardsWithProviderColorOverride() throws {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let payload = BeaconPayload.fromSnapshots(
+      [
+        CodexUsageSnapshot(
+          provider: CodexUsageProviderID.openAICodex.rawValue,
+          fetchedAt: now,
+          fiveHour: CodexUsageWindow(label: "5h", remainingPercent: 88, resetAt: nil),
+          weekly: nil
+        )
+      ],
+      generatedAt: now,
+      deviceID: "beacon-dev",
+      providerColors: [
+        CodexUsageProviderID.openAICodex.rawValue: BeaconRGB(red: 12, green: 34, blue: 56)
+      ]
+    )
+
+    XCTAssertEqual(payload.cards[0].accentColor, BeaconRGB(red: 12, green: 34, blue: 56))
   }
 
   func testBuildsWarningBeaconPayloadWhenNoCardsExist() throws {
@@ -299,6 +336,37 @@ final class CodexUsageCoreTests: XCTestCase {
 
     XCTAssertEqual(response.statusCode, 200)
     XCTAssertTrue(String(data: response.body, encoding: .utf8)?.contains("\"cards\"") == true)
+  }
+
+  func testServiceBeaconPayloadUsesSavedProviderColors() async throws {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let settingsStore = CodexSettingsStore(settingsURL: directory.appendingPathComponent("settings.json"))
+    let override = BeaconRGB(red: 9, green: 44, blue: 120)
+    try settingsStore.save(CodexMonitorSettings(
+      beaconProviderColors: [
+        CodexUsageProviderID.openAICodex.rawValue: override
+      ]
+    ))
+    let cache = CodexUsageCache(cacheURL: directory.appendingPathComponent("usage.json"))
+    try cache.save(snapshots: [
+      CodexUsageSnapshot(
+        fetchedAt: now,
+        fiveHour: CodexUsageWindow(label: "5h", remainingPercent: 88, resetAt: now.addingTimeInterval(3600)),
+        weekly: nil
+      )
+    ])
+    let service = CodexMonitorCollectionService(
+      settingsStore: settingsStore,
+      cache: cache,
+      fetcher: StubUsageFetcher(snapshots: []),
+      codexAuthStore: CodexAuthStore(environment: [:], secureStore: MemorySecureAuthStore(), legacyMonitorAuthFileURLs: []),
+      openRouterAPIKeyStore: OpenRouterAPIKeyStore(service: "test", account: "test", accessGroup: "")
+    )
+
+    let payload = try await service.beaconPayload(deviceID: "beacon-dev", generatedAt: now)
+
+    XCTAssertEqual(payload.cards[0].accentColor, override)
   }
 
   func testBeaconHTTPServerServesHealthEndpoint() async throws {
@@ -473,6 +541,9 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(appSource.contains("Text(\"Beacon API\")"))
     XCTAssertTrue(appSource.contains("Toggle(\"Enable Beacon API\""))
     XCTAssertTrue(appSource.contains("Regenerate API Key"))
+    XCTAssertTrue(appSource.contains("ColorPicker"))
+    XCTAssertTrue(appSource.contains("beaconColorBinding"))
+    XCTAssertTrue(appSource.contains("setBeaconAccentColor"))
     XCTAssertTrue(appSource.contains("serviceEndpointText"))
     XCTAssertTrue(appSource.contains("syncServiceLaunchStateIfNeeded"))
     XCTAssertTrue(appSource.contains("CodexMonitorServiceLifecycle.isEnabled"))

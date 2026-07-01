@@ -106,10 +106,12 @@ public actor CodexMonitorCollectionService {
     deviceID: String = "beacon-dev",
     generatedAt: Date = Date()
   ) throws -> BeaconPayload {
-    BeaconPayload.fromSnapshots(
+    let settings = settingsStore.load()
+    return BeaconPayload.fromSnapshots(
       try cache.loadSnapshots(),
       generatedAt: generatedAt,
-      deviceID: deviceID
+      deviceID: deviceID,
+      providerColors: settings.beaconProviderColors
     )
   }
 

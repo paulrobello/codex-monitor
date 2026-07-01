@@ -79,7 +79,10 @@ public struct BeaconCard: Codable, Equatable, Sendable {
     case secondaryProgressPercent = "secondary_progress_percent"
   }
 
-  public static func fromSnapshot(_ snapshot: CodexUsageSnapshot) -> BeaconCard? {
+  public static func fromSnapshot(
+    _ snapshot: CodexUsageSnapshot,
+    providerColors: [String: BeaconRGB] = [:]
+  ) -> BeaconCard? {
     let fiveHour = snapshot.fiveHour
     let weekly = snapshot.weekly
     let primaryPercent = clampedPercent(fiveHour?.remainingPercent ?? 0)
@@ -95,7 +98,9 @@ public struct BeaconCard: Codable, Equatable, Sendable {
       secondaryMetric: weekly.map { "\($0.label.uppercased()) \(secondaryPercent)%" },
       status: .healthy,
       kind: providerID == .openRouter ? .spend : .meter,
-      accentColor: providerID?.beaconAccentColor ?? BeaconRGB(red: 112, green: 124, blue: 140),
+      accentColor: providerColors[snapshot.provider]
+        ?? providerID?.beaconAccentColor
+        ?? BeaconRGB(red: 112, green: 124, blue: 140),
       progressPercent: primaryPercent,
       secondaryProgressPercent: secondaryPercent
     )
@@ -142,9 +147,10 @@ public struct BeaconPayload: Codable, Equatable, Sendable {
   public static func fromSnapshots(
     _ snapshots: [CodexUsageSnapshot],
     generatedAt: Date = Date(),
-    deviceID: String = "beacon-dev"
+    deviceID: String = "beacon-dev",
+    providerColors: [String: BeaconRGB] = [:]
   ) -> BeaconPayload {
-    let cards = snapshots.compactMap { BeaconCard.fromSnapshot($0) }
+    let cards = snapshots.compactMap { BeaconCard.fromSnapshot($0, providerColors: providerColors) }
     return BeaconPayload(
       deviceID: deviceID,
       generatedAt: generatedAt,

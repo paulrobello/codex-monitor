@@ -147,7 +147,10 @@ final class iOSUsageStore: ObservableObject {
   func setRefreshInterval(minutes: Int) {
     let nextSettings = CodexMonitorSettings(
       refreshIntervalMinutes: minutes,
-      enabledProviders: settings.enabledProviders
+      enabledProviders: settings.enabledProviders,
+      beaconAPIEnabled: settings.beaconAPIEnabled,
+      beaconAPIPort: settings.beaconAPIPort,
+      beaconProviderColors: settings.beaconProviderColors
     )
     do {
       try settingsStore.save(nextSettings)
@@ -169,7 +172,10 @@ final class iOSUsageStore: ObservableObject {
     }
     let nextSettings = CodexMonitorSettings(
       refreshIntervalMinutes: settings.refreshIntervalMinutes,
-      enabledProviders: providers
+      enabledProviders: providers,
+      beaconAPIEnabled: settings.beaconAPIEnabled,
+      beaconAPIPort: settings.beaconAPIPort,
+      beaconProviderColors: settings.beaconProviderColors
     )
     do {
       try settingsStore.save(nextSettings)

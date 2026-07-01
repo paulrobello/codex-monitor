@@ -291,7 +291,8 @@ final class UsageStore: ObservableObject {
       refreshIntervalMinutes: minutes,
       enabledProviders: settings.enabledProviders,
       beaconAPIEnabled: settings.beaconAPIEnabled,
-      beaconAPIPort: settings.beaconAPIPort
+      beaconAPIPort: settings.beaconAPIPort,
+      beaconProviderColors: settings.beaconProviderColors
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
     nextRefreshAt = nextSettings.nextRefreshDate(after: Date())
@@ -310,7 +311,8 @@ final class UsageStore: ObservableObject {
       refreshIntervalMinutes: settings.refreshIntervalMinutes,
       enabledProviders: providers,
       beaconAPIEnabled: settings.beaconAPIEnabled,
-      beaconAPIPort: settings.beaconAPIPort
+      beaconAPIPort: settings.beaconAPIPort,
+      beaconProviderColors: settings.beaconProviderColors
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
     WidgetCenter.shared.reloadAllTimelines()
@@ -324,7 +326,8 @@ final class UsageStore: ObservableObject {
       refreshIntervalMinutes: settings.refreshIntervalMinutes,
       enabledProviders: settings.enabledProviders,
       beaconAPIEnabled: enabled,
-      beaconAPIPort: settings.beaconAPIPort
+      beaconAPIPort: settings.beaconAPIPort,
+      beaconProviderColors: settings.beaconProviderColors
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
   }
@@ -334,7 +337,21 @@ final class UsageStore: ObservableObject {
       refreshIntervalMinutes: settings.refreshIntervalMinutes,
       enabledProviders: settings.enabledProviders,
       beaconAPIEnabled: settings.beaconAPIEnabled,
-      beaconAPIPort: port
+      beaconAPIPort: port,
+      beaconProviderColors: settings.beaconProviderColors
+    )
+    saveSettingsAndApplyBeaconAPI(nextSettings)
+  }
+
+  func setBeaconAccentColor(_ color: BeaconRGB, for provider: CodexUsageProviderID) {
+    var providerColors = settings.beaconProviderColors
+    providerColors[provider.rawValue] = color
+    let nextSettings = CodexMonitorSettings(
+      refreshIntervalMinutes: settings.refreshIntervalMinutes,
+      enabledProviders: settings.enabledProviders,
+      beaconAPIEnabled: settings.beaconAPIEnabled,
+      beaconAPIPort: settings.beaconAPIPort,
+      beaconProviderColors: providerColors
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
   }
@@ -649,6 +666,13 @@ struct SettingsView: View {
           .foregroundStyle(.secondary)
           .textSelection(.enabled)
         Stepper("Port \(store.settings.beaconAPIPort)", value: beaconAPIPortBinding, in: 1024...65535)
+        VStack(alignment: .leading, spacing: 6) {
+          Text("Card Colors")
+            .font(.subheadline)
+          ForEach(CodexUsageProviderID.allCases, id: \.self) { provider in
+            ColorPicker(provider.displayName, selection: beaconColorBinding(provider), supportsOpacity: false)
+          }
+        }
         Button("Regenerate API Key") {
           store.regenerateBeaconAPIKey()
         }
@@ -710,11 +734,41 @@ struct SettingsView: View {
     )
   }
 
+  private func beaconColorBinding(_ provider: CodexUsageProviderID) -> Binding<Color> {
+    Binding(
+      get: { store.settings.beaconAccentColor(for: provider).swiftUIColor },
+      set: { store.setBeaconAccentColor(BeaconRGB(color: $0), for: provider) }
+    )
+  }
+
   private var serviceLaunchAtLoginBinding: Binding<Bool> {
     Binding(
       get: { store.serviceLaunchAtLoginEnabled },
       set: { store.setServiceLaunchAtLogin($0) }
     )
+  }
+}
+
+private extension BeaconRGB {
+  init(color: Color) {
+    let color = NSColor(color).usingColorSpace(.sRGB) ?? .white
+    self.init(
+      red: Self.byte(from: color.redComponent),
+      green: Self.byte(from: color.greenComponent),
+      blue: Self.byte(from: color.blueComponent)
+    )
+  }
+
+  var swiftUIColor: Color {
+    Color(
+      red: Double(red) / 255.0,
+      green: Double(green) / 255.0,
+      blue: Double(blue) / 255.0
+    )
+  }
+
+  private static func byte(from component: CGFloat) -> Int {
+    max(0, min(255, Int((Double(component) * 255.0).rounded())))
   }
 }
 
