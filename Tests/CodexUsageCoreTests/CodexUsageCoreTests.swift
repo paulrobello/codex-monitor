@@ -114,6 +114,191 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(CodexMonitorSettings(refreshIntervalMinutes: 3).refreshIntervalMinutes, 15)
   }
 
+  func testMonitorSettingsIncludeBeaconAPIDefaultOff() throws {
+    let settings = CodexMonitorSettings()
+
+    XCTAssertFalse(settings.beaconAPIEnabled)
+    XCTAssertEqual(settings.beaconAPIPort, 8765)
+    XCTAssertEqual(settings.refreshIntervalMinutes, 15)
+  }
+
+  func testMonitorSettingsClampBeaconAPIPort() throws {
+    XCTAssertEqual(CodexMonitorSettings(beaconAPIPort: 0).beaconAPIPort, 8765)
+    XCTAssertEqual(CodexMonitorSettings(beaconAPIPort: 70000).beaconAPIPort, 8765)
+    XCTAssertEqual(CodexMonitorSettings(beaconAPIPort: 9000).beaconAPIPort, 9000)
+  }
+
+  func testServiceStatusEncodesRefreshState() throws {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let status = CodexMonitorServiceStatus(
+      generatedAt: now,
+      lastRefreshAt: now.addingTimeInterval(-60),
+      nextRefreshAt: now.addingTimeInterval(840),
+      refreshIntervalSeconds: 900,
+      refreshState: .healthy,
+      refreshMessage: "Refresh completed",
+      refreshCount: 3,
+      providerCount: 2
+    )
+
+    let data = try JSONEncoder.codexMonitor.encode(status)
+    let decoded = try JSONDecoder.codexMonitor.decode(CodexMonitorServiceStatus.self, from: data)
+
+    XCTAssertEqual(decoded.refreshState, .healthy)
+    XCTAssertEqual(decoded.refreshCount, 3)
+    XCTAssertEqual(decoded.providerCount, 2)
+  }
+
+  func testBuildsBeaconCardsFromUsageSnapshots() throws {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let snapshots = [
+      CodexUsageSnapshot(
+        provider: "openai-codex",
+        fetchedAt: now,
+        fiveHour: CodexUsageWindow(
+          label: "5h",
+          remainingPercent: 88,
+          resetAt: now.addingTimeInterval(3600)
+        ),
+        weekly: CodexUsageWindow(
+          label: "wk",
+          remainingPercent: 89,
+          resetAt: now.addingTimeInterval(172800)
+        )
+      )
+    ]
+
+    let payload = BeaconPayload.fromSnapshots(
+      snapshots,
+      generatedAt: now,
+      deviceID: "beacon-dev"
+    )
+
+    XCTAssertEqual(payload.deviceID, "beacon-dev")
+    XCTAssertEqual(payload.cards.count, 1)
+    XCTAssertEqual(payload.cards[0].provider, "openai-codex")
+    XCTAssertEqual(payload.cards[0].title, "CODEX")
+    XCTAssertEqual(payload.cards[0].kind, .meter)
+    XCTAssertEqual(payload.cards[0].accentColor, BeaconRGB(red: 191, green: 90, blue: 242))
+    XCTAssertEqual(payload.cards[0].progressPercent, 88)
+    XCTAssertEqual(payload.cards[0].secondaryProgressPercent, 89)
+  }
+
+  func testBuildsWarningBeaconPayloadWhenNoCardsExist() throws {
+    let payload = BeaconPayload.fromSnapshots(
+      [],
+      generatedAt: Date(timeIntervalSince1970: 1_800_000_000),
+      deviceID: "beacon-dev"
+    )
+
+    XCTAssertEqual(payload.cards.count, 1)
+    XCTAssertEqual(payload.cards[0].status, .warning)
+    XCTAssertEqual(payload.cards[0].title, "DATA UNAVAILABLE")
+    XCTAssertEqual(payload.cards[0].accentColor, BeaconRGB(red: 255, green: 214, blue: 10))
+  }
+
+  func testServiceRefreshWritesCacheAndStatus() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let cacheURL = directory.appendingPathComponent("usage.json")
+    let cache = CodexUsageCache(cacheURL: cacheURL)
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let snapshot = CodexUsageSnapshot(
+      fetchedAt: now,
+      fiveHour: CodexUsageWindow(label: "5h", remainingPercent: 82, resetAt: now.addingTimeInterval(3600)),
+      weekly: nil
+    )
+    let fetcher = StubUsageFetcher(snapshots: [snapshot])
+    let service = CodexMonitorCollectionService(
+      settingsStore: CodexSettingsStore(settingsURL: directory.appendingPathComponent("settings.json")),
+      cache: cache,
+      fetcher: fetcher,
+      codexAuthStore: CodexAuthStore(environment: [:], secureStore: MemorySecureAuthStore(), legacyMonitorAuthFileURLs: []),
+      openRouterAPIKeyStore: OpenRouterAPIKeyStore(service: "test", account: "test", accessGroup: "")
+    )
+
+    let snapshots = try await service.refreshNow()
+    let status = await service.status(now: now)
+
+    XCTAssertEqual(snapshots, [snapshot])
+    XCTAssertEqual(try cache.loadSnapshots(), [snapshot])
+    XCTAssertEqual(status.refreshState, .healthy)
+    XCTAssertEqual(status.refreshCount, 1)
+    XCTAssertEqual(fetcher.calls, 1)
+  }
+
+  func testBeaconAPIKeyStoreGeneratesAndPersistsKey() throws {
+    let store = BeaconAPIKeyStore(service: "test.beacon.api", account: UUID().uuidString, accessGroup: "")
+
+    try? store.clear()
+    let first = try store.currentOrCreateAPIKey()
+    let second = try store.currentOrCreateAPIKey()
+
+    XCTAssertEqual(first, second)
+    XCTAssertGreaterThanOrEqual(first.count, 32)
+    XCTAssertTrue(store.validate(apiKey: first))
+    XCTAssertFalse(store.validate(apiKey: "wrong"))
+
+    try store.clear()
+  }
+
+  func testBeaconHTTPHandlerRequiresAPIKeyForCards() async throws {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let service = CodexMonitorCollectionService(
+      settingsStore: CodexSettingsStore(settingsURL: directory.appendingPathComponent("settings.json")),
+      cache: CodexUsageCache(cacheURL: directory.appendingPathComponent("usage.json")),
+      fetcher: StubUsageFetcher(snapshots: []),
+      codexAuthStore: CodexAuthStore(environment: [:], secureStore: MemorySecureAuthStore(), legacyMonitorAuthFileURLs: []),
+      openRouterAPIKeyStore: OpenRouterAPIKeyStore(service: "test", account: "test", accessGroup: "")
+    )
+    let keyStore = MemoryBeaconAPIKeyStore(apiKey: "secret")
+    let handler = BeaconHTTPRequestHandler(service: service, apiKeyValidator: keyStore, now: { now })
+
+    let response = await handler.handle(
+      method: "GET",
+      path: "/api/v1/cards",
+      headers: [:],
+      body: Data()
+    )
+
+    XCTAssertEqual(response.statusCode, 401)
+  }
+
+  func testBeaconHTTPHandlerReturnsCardsWithValidAPIKey() async throws {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let cache = CodexUsageCache(cacheURL: directory.appendingPathComponent("usage.json"))
+    try cache.save(snapshots: [
+      CodexUsageSnapshot(
+        fetchedAt: now,
+        fiveHour: CodexUsageWindow(label: "5h", remainingPercent: 88, resetAt: now.addingTimeInterval(3600)),
+        weekly: nil
+      )
+    ])
+    let service = CodexMonitorCollectionService(
+      settingsStore: CodexSettingsStore(settingsURL: directory.appendingPathComponent("settings.json")),
+      cache: cache,
+      fetcher: StubUsageFetcher(snapshots: []),
+      codexAuthStore: CodexAuthStore(environment: [:], secureStore: MemorySecureAuthStore(), legacyMonitorAuthFileURLs: []),
+      openRouterAPIKeyStore: OpenRouterAPIKeyStore(service: "test", account: "test", accessGroup: "")
+    )
+    let handler = BeaconHTTPRequestHandler(
+      service: service,
+      apiKeyValidator: MemoryBeaconAPIKeyStore(apiKey: "secret"),
+      now: { now }
+    )
+
+    let response = await handler.handle(
+      method: "GET",
+      path: "/api/v1/cards",
+      headers: ["authorization": "Bearer secret"],
+      body: Data()
+    )
+
+    XCTAssertEqual(response.statusCode, 200)
+    XCTAssertTrue(String(data: response.body, encoding: .utf8)?.contains("\"cards\"") == true)
+  }
+
   func testComputesNextRefreshDateFromEntryDate() {
     let entryDate = Date(timeIntervalSince1970: 1_800_000_000)
     let settings = CodexMonitorSettings(refreshIntervalMinutes: 15)
@@ -525,5 +710,34 @@ private final class MemorySecureAuthStore: CodexSecureAuthStoring, @unchecked Se
 
   func clear() throws {
     credentials = nil
+  }
+}
+
+private final class StubUsageFetcher: UsageFetching, @unchecked Sendable {
+  var snapshots: [CodexUsageSnapshot]
+  var calls = 0
+
+  init(snapshots: [CodexUsageSnapshot]) {
+    self.snapshots = snapshots
+  }
+
+  func fetchUsage(
+    settings: CodexMonitorSettings,
+    codexAuthStore: CodexAuthStore,
+    openRouterAPIKeyStore: OpenRouterAPIKeyStore
+  ) async throws -> [CodexUsageSnapshot] {
+    _ = settings
+    _ = codexAuthStore
+    _ = openRouterAPIKeyStore
+    calls += 1
+    return snapshots
+  }
+}
+
+private struct MemoryBeaconAPIKeyStore: BeaconAPIKeyValidating {
+  var apiKey: String
+
+  func validate(apiKey: String) -> Bool {
+    self.apiKey == apiKey
   }
 }

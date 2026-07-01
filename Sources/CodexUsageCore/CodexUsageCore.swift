@@ -63,6 +63,39 @@ public enum CodexUsageProviderID: String, Codable, CaseIterable, Sendable {
       return "Claude Code"
     }
   }
+
+  public var beaconTitle: String {
+    switch self {
+    case .openAICodex:
+      return "CODEX"
+    case .openRouter:
+      return "OPENROUTER"
+    case .claudeCode:
+      return "CLAUDE CODE"
+    }
+  }
+
+  public var beaconSubtitle: String {
+    switch self {
+    case .openAICodex:
+      return "USAGE"
+    case .openRouter:
+      return "CREDITS"
+    case .claudeCode:
+      return "LOCAL SESSIONS"
+    }
+  }
+
+  public var beaconAccentColor: BeaconRGB {
+    switch self {
+    case .openAICodex:
+      return BeaconRGB(red: 191, green: 90, blue: 242)
+    case .openRouter:
+      return BeaconRGB(red: 100, green: 103, blue: 242)
+    case .claudeCode:
+      return BeaconRGB(red: 255, green: 159, blue: 10)
+    }
+  }
 }
 
 public struct CodexAuthCredentials: Equatable, Sendable {
@@ -337,6 +370,113 @@ public final class OpenRouterAPIKeyStore: @unchecked Sendable {
       return nil
     }
     return value
+  }
+}
+
+public final class BeaconAPIKeyStore: @unchecked Sendable {
+  public static let service = "net.pardev.CodexMonitor.beacon-api"
+  public static let account = "beacon-api-key"
+  public static let accessGroup = CodexKeychainAuthStore.accessGroup
+
+  private let service: String
+  private let account: String
+  private let accessGroup: String
+
+  public init(
+    service: String = BeaconAPIKeyStore.service,
+    account: String = BeaconAPIKeyStore.account,
+    accessGroup: String = BeaconAPIKeyStore.accessGroup
+  ) {
+    self.service = service
+    self.account = account
+    self.accessGroup = accessGroup
+  }
+
+  public func currentOrCreateAPIKey() throws -> String {
+    if let existing = try? loadAPIKey(), !existing.isEmpty {
+      return existing
+    }
+    let key = Self.generateAPIKey()
+    try save(apiKey: key)
+    return key
+  }
+
+  public func validate(apiKey: String) -> Bool {
+    guard let stored = try? loadAPIKey() else {
+      return false
+    }
+    return stored == apiKey
+  }
+
+  public func loadAPIKey() throws -> String {
+    var query = baseQuery()
+    query[kSecReturnData as String] = kCFBooleanTrue
+    query[kSecMatchLimit as String] = kSecMatchLimitOne
+
+    var item: CFTypeRef?
+    let status = SecItemCopyMatching(query as CFDictionary, &item)
+    if status == errSecItemNotFound {
+      throw CodexUsageError.keychainFailed("read Beacon API key", status)
+    }
+    guard status == errSecSuccess else {
+      throw CodexUsageError.keychainFailed("read Beacon API key", status)
+    }
+    guard let data = item as? Data, let key = String(data: data, encoding: .utf8),
+      !key.isEmpty
+    else {
+      throw CodexUsageError.keychainFailed("decode Beacon API key", errSecInternalComponent)
+    }
+    return key
+  }
+
+  public func save(apiKey: String) throws {
+    let data = Data(apiKey.utf8)
+    let attributes: [String: Any] = [
+      kSecValueData as String: data
+    ]
+    let updateStatus = SecItemUpdate(baseQuery() as CFDictionary, attributes as CFDictionary)
+    if updateStatus == errSecSuccess {
+      return
+    }
+    guard updateStatus == errSecItemNotFound else {
+      throw CodexUsageError.keychainFailed("update Beacon API key", updateStatus)
+    }
+
+    var query = baseQuery()
+    query[kSecValueData as String] = data
+    query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+    let addStatus = SecItemAdd(query as CFDictionary, nil)
+    guard addStatus == errSecSuccess else {
+      throw CodexUsageError.keychainFailed("save Beacon API key", addStatus)
+    }
+  }
+
+  public func clear() throws {
+    let status = SecItemDelete(baseQuery() as CFDictionary)
+    guard status == errSecSuccess || status == errSecItemNotFound else {
+      throw CodexUsageError.keychainFailed("clear Beacon API key", status)
+    }
+  }
+
+  public static func generateAPIKey() -> String {
+    var bytes = [UInt8](repeating: 0, count: 32)
+    let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+    if status != errSecSuccess {
+      bytes = (0..<32).map { _ in UInt8.random(in: UInt8.min...UInt8.max) }
+    }
+    return Data(bytes).base64EncodedString()
+  }
+
+  private func baseQuery() -> [String: Any] {
+    var query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
+      kSecAttrAccount as String: account,
+    ]
+    if !accessGroup.isEmpty {
+      query[kSecAttrAccessGroup as String] = accessGroup
+    }
+    return query
   }
 }
 
@@ -1360,7 +1500,7 @@ public enum CodexRefreshText {
   }
 }
 
-public final class CodexUsageCache {
+public final class CodexUsageCache: @unchecked Sendable {
   private let fileManager: FileManager
   public let cacheURL: URL
 
@@ -1411,21 +1551,30 @@ public final class CodexUsageCache {
 public struct CodexMonitorSettings: Codable, Equatable, Sendable {
   public static let defaultRefreshIntervalMinutes = 15
   public static let allowedRefreshIntervalMinutes = [5, 15, 30, 60]
+  public static let defaultBeaconAPIPort = 8765
 
   public var refreshIntervalMinutes: Int
   public var enabledProviders: [CodexUsageProviderID]
+  public var beaconAPIEnabled: Bool
+  public var beaconAPIPort: Int
 
   public init(
     refreshIntervalMinutes: Int = Self.defaultRefreshIntervalMinutes,
-    enabledProviders: [CodexUsageProviderID] = [.openAICodex]
+    enabledProviders: [CodexUsageProviderID] = [.openAICodex],
+    beaconAPIEnabled: Bool = false,
+    beaconAPIPort: Int = Self.defaultBeaconAPIPort
   ) {
     self.refreshIntervalMinutes = Self.normalizedRefreshIntervalMinutes(refreshIntervalMinutes)
     self.enabledProviders = Self.normalizedEnabledProviders(enabledProviders)
+    self.beaconAPIEnabled = beaconAPIEnabled
+    self.beaconAPIPort = Self.normalizedBeaconAPIPort(beaconAPIPort)
   }
 
   private enum CodingKeys: String, CodingKey {
     case refreshIntervalMinutes
     case enabledProviders
+    case beaconAPIEnabled
+    case beaconAPIPort
   }
 
   public init(from decoder: Decoder) throws {
@@ -1436,13 +1585,23 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
     let enabledProviders =
       try container.decodeIfPresent([CodexUsageProviderID].self, forKey: .enabledProviders)
       ?? [.openAICodex]
-    self.init(refreshIntervalMinutes: refreshIntervalMinutes, enabledProviders: enabledProviders)
+    let beaconAPIEnabled = try container.decodeIfPresent(Bool.self, forKey: .beaconAPIEnabled) ?? false
+    let beaconAPIPort =
+      try container.decodeIfPresent(Int.self, forKey: .beaconAPIPort) ?? Self.defaultBeaconAPIPort
+    self.init(
+      refreshIntervalMinutes: refreshIntervalMinutes,
+      enabledProviders: enabledProviders,
+      beaconAPIEnabled: beaconAPIEnabled,
+      beaconAPIPort: beaconAPIPort
+    )
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encode(refreshIntervalMinutes, forKey: .refreshIntervalMinutes)
     try container.encode(enabledProviders, forKey: .enabledProviders)
+    try container.encode(beaconAPIEnabled, forKey: .beaconAPIEnabled)
+    try container.encode(beaconAPIPort, forKey: .beaconAPIPort)
   }
 
   public var refreshIntervalSeconds: TimeInterval {
@@ -1455,6 +1614,10 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
 
   public static func normalizedRefreshIntervalMinutes(_ value: Int) -> Int {
     allowedRefreshIntervalMinutes.contains(value) ? value : defaultRefreshIntervalMinutes
+  }
+
+  public static func normalizedBeaconAPIPort(_ value: Int) -> Int {
+    (1024...65535).contains(value) ? value : defaultBeaconAPIPort
   }
 
   public static func normalizedEnabledProviders(_ value: [CodexUsageProviderID])
@@ -1483,7 +1646,9 @@ public final class CodexSettingsStore: @unchecked Sendable {
     }
     return CodexMonitorSettings(
       refreshIntervalMinutes: settings.refreshIntervalMinutes,
-      enabledProviders: settings.enabledProviders
+      enabledProviders: settings.enabledProviders,
+      beaconAPIEnabled: settings.beaconAPIEnabled,
+      beaconAPIPort: settings.beaconAPIPort
     )
   }
 
