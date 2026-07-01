@@ -574,6 +574,43 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(project.contains("CodexMonitorService.app was not built"))
   }
 
+  func testMacAppExposesServiceRegistrationCommandLineMode() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let appSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent(
+        "Sources/CodexMonitorApp/CodexMonitorApp.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(appSource.contains("CodexMonitorServiceCommand.handleIfNeeded()"))
+    XCTAssertTrue(appSource.contains("case \"--register-service\":"))
+    XCTAssertTrue(appSource.contains("case \"--unregister-service\":"))
+    XCTAssertTrue(appSource.contains("SMAppService.loginItem(identifier: serviceIdentifier)"))
+    XCTAssertTrue(appSource.contains("Darwin.exit(EXIT_SUCCESS)"))
+  }
+
+  func testMakefileExposesServiceInstallTargets() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let makefile = try String(
+      contentsOf: repositoryRoot.appendingPathComponent("Makefile"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(makefile.contains("install-service: install"))
+    XCTAssertTrue(makefile.contains("uninstall-service:"))
+    XCTAssertTrue(makefile.contains("INSTALLED_APP_EXECUTABLE"))
+    XCTAssertTrue(makefile.contains("--register-service"))
+    XCTAssertTrue(makefile.contains("--unregister-service"))
+  }
+
   func testCLITargetDoesNotRequireProvisionedKeychainEntitlement() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let repositoryRoot = testFile

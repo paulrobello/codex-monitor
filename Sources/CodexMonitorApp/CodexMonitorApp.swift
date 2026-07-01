@@ -8,6 +8,10 @@ import WidgetKit
 struct CodexMonitorApp: App {
   @StateObject private var store = UsageStore()
 
+  init() {
+    CodexMonitorServiceCommand.handleIfNeeded()
+  }
+
   var body: some Scene {
     WindowGroup("Codex Monitor") {
       ContentView(store: store)
@@ -71,6 +75,65 @@ struct CodexMonitorApp: App {
     Settings {
       SettingsView(store: store)
         .frame(width: 420)
+    }
+  }
+}
+
+enum CodexMonitorServiceCommand {
+  private static let serviceIdentifier = "net.pardev.CodexMonitor.Service"
+
+  static func handleIfNeeded(arguments: [String] = CommandLine.arguments) {
+    guard let command = arguments.dropFirst().first else {
+      return
+    }
+    do {
+      switch command {
+      case "--register-service":
+        try registerService()
+        Darwin.exit(EXIT_SUCCESS)
+      case "--unregister-service":
+        try unregisterService()
+        Darwin.exit(EXIT_SUCCESS)
+      default:
+        return
+      }
+    } catch {
+      FileHandle.standardError.write(Data((error.localizedDescription + "\n").utf8))
+      Darwin.exit(EXIT_FAILURE)
+    }
+  }
+
+  private static func registerService() throws {
+    let service = SMAppService.loginItem(identifier: serviceIdentifier)
+    if service.status == .enabled {
+      print("CodexMonitorService login item already enabled.")
+      return
+    }
+    try service.register()
+    guard service.status == .enabled else {
+      throw ServiceCommandError.unexpectedStatus(service.status)
+    }
+    print("CodexMonitorService login item enabled.")
+  }
+
+  private static func unregisterService() throws {
+    let service = SMAppService.loginItem(identifier: serviceIdentifier)
+    if service.status == .notRegistered {
+      print("CodexMonitorService login item already unregistered.")
+      return
+    }
+    try service.unregister()
+    print("CodexMonitorService login item unregistered.")
+  }
+
+  private enum ServiceCommandError: LocalizedError {
+    case unexpectedStatus(SMAppService.Status)
+
+    var errorDescription: String? {
+      switch self {
+      case .unexpectedStatus(let status):
+        return "CodexMonitorService login item registration ended with status \(status)."
+      }
     }
   }
 }

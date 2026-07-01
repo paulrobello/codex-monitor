@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt typecheck checkall generate install install-phone launch-phone run refresh clean
+.PHONY: build test lint fmt typecheck checkall generate install install-service uninstall-service install-phone launch-phone run refresh clean
 
 PROJECT := CodexMonitor.xcodeproj
 SCHEME := CodexMonitor
@@ -17,6 +17,7 @@ IOS_APP_BUNDLE := $(DERIVED_DATA)/Build/Products/$(CONFIGURATION)-iphoneos/$(IOS
 APP_EXTENSION_PATH := Contents/PlugIns/CodexMonitorWidgetExtension.appex
 INSTALL_DIR ?= $(HOME)/Applications
 INSTALLED_APP_BUNDLE := $(INSTALL_DIR)/$(APP_BUNDLE_NAME)
+INSTALLED_APP_EXECUTABLE := $(INSTALLED_APP_BUNDLE)/Contents/MacOS/$(APP_NAME)
 PHONE_DEVICE ?= Pauls iPhone 17
 PHONE_DESTINATION ?= platform=iOS,name=$(PHONE_DEVICE)
 LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
@@ -51,6 +52,16 @@ install: build
 	"$(LSREGISTER)" -f "$(INSTALLED_APP_BUNDLE)"
 	pluginkit -a "$(INSTALLED_APP_BUNDLE)/$(APP_EXTENSION_PATH)" >/dev/null 2>&1 || true
 	pkill -x "$(WIDGET_EXTENSION_PROCESS)" >/dev/null 2>&1 || true
+
+install-service: install
+	"$(INSTALLED_APP_EXECUTABLE)" --register-service
+
+uninstall-service:
+	@if [ ! -x "$(INSTALLED_APP_EXECUTABLE)" ]; then \
+		echo "$(INSTALLED_APP_EXECUTABLE) is missing; run make install first."; \
+		exit 1; \
+	fi
+	"$(INSTALLED_APP_EXECUTABLE)" --unregister-service
 
 install-phone: generate
 	xcodebuild $(XCODEBUILD_FLAGS) -project $(PROJECT) -scheme $(IOS_SCHEME) -configuration $(CONFIGURATION) -derivedDataPath $(DERIVED_DATA) -destination '$(PHONE_DESTINATION)' build

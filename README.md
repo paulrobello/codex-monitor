@@ -127,6 +127,8 @@ Build and use the `codex-usage` CLI:
 
 ```bash
 make refresh                           # Build + fetch current usage
+make install-service                   # Install app + register login service
+make uninstall-service                 # Unregister login service
 
 # After building, the CLI is at:
 build/DerivedData/Build/Products/Debug/codex-usage login         # Start OAuth login
