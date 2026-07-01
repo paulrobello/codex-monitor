@@ -475,9 +475,29 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(appSource.contains("Regenerate API Key"))
     XCTAssertTrue(appSource.contains("serviceEndpointText"))
     XCTAssertTrue(appSource.contains("syncServiceLaunchStateIfNeeded"))
-    XCTAssertTrue(appSource.contains("NSRunningApplication.runningApplications"))
+    XCTAssertTrue(appSource.contains("CodexMonitorServiceLifecycle.isEnabled"))
     XCTAssertFalse(appSource.contains("beaconHTTPServer"))
     XCTAssertFalse(appSource.contains("startBeaconServerIfNeeded"))
+  }
+
+  func testMacAppCentralizesServiceLifecycleDetection() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let appSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent(
+        "Sources/CodexMonitorApp/CodexMonitorApp.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(appSource.contains("enum CodexMonitorServiceLifecycle"))
+    XCTAssertTrue(appSource.contains("static var isEnabled: Bool"))
+    XCTAssertTrue(appSource.contains("static func registerOrRestart() throws"))
+    XCTAssertTrue(appSource.contains("static func unregister() throws"))
+    XCTAssertTrue(appSource.contains("refreshServiceLaunchState()"))
+    XCTAssertFalse(appSource.contains("NSRunningApplication.runningApplications"))
   }
 
   func testUsageBarsUseAccentableCustomWidgetFillAndReloadOnAppStart() throws {

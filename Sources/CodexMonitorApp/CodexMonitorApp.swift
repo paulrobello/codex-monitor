@@ -80,8 +80,6 @@ struct CodexMonitorApp: App {
 }
 
 enum CodexMonitorServiceCommand {
-  private static let serviceIdentifier = "net.pardev.CodexMonitor.Service"
-
   static func handleIfNeeded(arguments: [String] = CommandLine.arguments) {
     guard let command = arguments.dropFirst().first else {
       return
@@ -89,10 +87,17 @@ enum CodexMonitorServiceCommand {
     do {
       switch command {
       case "--register-service":
-        try registerService()
+        try CodexMonitorServiceLifecycle.registerOrRestart()
+        print("CodexMonitorService login item enabled.")
         Darwin.exit(EXIT_SUCCESS)
       case "--unregister-service":
-        try unregisterService()
+        let wasEnabled = CodexMonitorServiceLifecycle.isEnabled
+        try CodexMonitorServiceLifecycle.unregister()
+        print(
+          wasEnabled
+            ? "CodexMonitorService login item unregistered."
+            : "CodexMonitorService login item already unregistered."
+        )
         Darwin.exit(EXIT_SUCCESS)
       default:
         return
@@ -102,36 +107,45 @@ enum CodexMonitorServiceCommand {
       Darwin.exit(EXIT_FAILURE)
     }
   }
+}
 
-  private static func registerService() throws {
-    let service = SMAppService.loginItem(identifier: serviceIdentifier)
-    if service.status == .enabled {
-      try service.unregister()
+enum CodexMonitorServiceLifecycle {
+  private static let serviceIdentifier = "net.pardev.CodexMonitor.Service"
+
+  static var isEnabled: Bool {
+    service.status == .enabled
+  }
+
+  static func registerOrRestart() throws {
+    let loginItem = service
+    if loginItem.status == .enabled {
+      try loginItem.unregister()
     }
     try service.register()
-    guard service.status == .enabled else {
-      throw ServiceCommandError.unexpectedStatus(service.status)
+    guard isEnabled else {
+      throw ServiceLifecycleError.unexpectedStatus(service.status)
     }
-    print("CodexMonitorService login item enabled.")
   }
 
-  private static func unregisterService() throws {
-    let service = SMAppService.loginItem(identifier: serviceIdentifier)
-    if service.status == .notRegistered {
-      print("CodexMonitorService login item already unregistered.")
+  static func unregister() throws {
+    let loginItem = service
+    guard loginItem.status != .notRegistered else {
       return
     }
-    try service.unregister()
-    print("CodexMonitorService login item unregistered.")
+    try loginItem.unregister()
   }
 
-  private enum ServiceCommandError: LocalizedError {
+  private static var service: SMAppService {
+    SMAppService.loginItem(identifier: serviceIdentifier)
+  }
+
+  private enum ServiceLifecycleError: LocalizedError {
     case unexpectedStatus(SMAppService.Status)
 
     var errorDescription: String? {
       switch self {
       case .unexpectedStatus(let status):
-        return "CodexMonitorService login item registration ended with status \(status)."
+        return "CodexMonitorService login item lifecycle ended with status \(status)."
       }
     }
   }
@@ -161,8 +175,7 @@ final class UsageStore: ObservableObject {
     self.settings = CodexSettingsStore().load()
     self.isCodexSignedIn = authStore.hasCredentials()
     self.hasOpenRouterAPIKey = openRouterAPIKeyStore.hasAPIKey()
-    self.serviceLaunchAtLoginEnabled =
-      SMAppService.loginItem(identifier: "net.pardev.CodexMonitor.Service").status == .enabled
+    self.serviceLaunchAtLoginEnabled = CodexMonitorServiceLifecycle.isEnabled
     self.hasBeaconAPIKey = (try? beaconAPIKeyStore.currentOrCreateAPIKey()) != nil
     self.beaconAPIURLText = Self.serviceEndpointText(
       settings: settings,
@@ -339,14 +352,14 @@ final class UsageStore: ObservableObject {
   func setServiceLaunchAtLogin(_ enabled: Bool) {
     do {
       if enabled {
-        try SMAppService.loginItem(identifier: "net.pardev.CodexMonitor.Service").register()
+        try CodexMonitorServiceLifecycle.registerOrRestart()
       } else {
-        try SMAppService.loginItem(identifier: "net.pardev.CodexMonitor.Service").unregister()
-        terminateRunningService()
+        try CodexMonitorServiceLifecycle.unregister()
       }
-      serviceLaunchAtLoginEnabled = enabled
-      updateBeaconAPIState()
+      updateBeaconAPIState(restartServiceIfNeeded: false)
     } catch {
+      refreshServiceLaunchState()
+      updateBeaconAPIState(restartServiceIfNeeded: false)
       errorMessage = error.localizedDescription
     }
   }
@@ -401,7 +414,7 @@ final class UsageStore: ObservableObject {
     }
   }
 
-  private func updateBeaconAPIState() {
+  private func updateBeaconAPIState(restartServiceIfNeeded: Bool = true) {
     if settings.beaconAPIEnabled {
       do {
         _ = try beaconAPIKeyStore.currentOrCreateAPIKey()
@@ -410,34 +423,32 @@ final class UsageStore: ObservableObject {
         errorMessage = error.localizedDescription
       }
     }
+    if restartServiceIfNeeded {
+      syncServiceLaunchStateIfNeeded()
+    } else {
+      refreshServiceLaunchState()
+    }
     beaconAPIURLText = Self.serviceEndpointText(
       settings: settings,
       serviceLaunchAtLoginEnabled: serviceLaunchAtLoginEnabled
     )
-    syncServiceLaunchStateIfNeeded()
   }
 
   private func syncServiceLaunchStateIfNeeded() {
+    refreshServiceLaunchState()
     if serviceLaunchAtLoginEnabled && settings.beaconAPIEnabled {
-      restartRunningService()
+      do {
+        try CodexMonitorServiceLifecycle.registerOrRestart()
+        refreshServiceLaunchState()
+      } catch {
+        refreshServiceLaunchState()
+        errorMessage = error.localizedDescription
+      }
     }
   }
 
-  private func restartRunningService() {
-    terminateRunningService()
-    do {
-      try SMAppService.loginItem(identifier: "net.pardev.CodexMonitor.Service").register()
-    } catch {
-      errorMessage = error.localizedDescription
-    }
-  }
-
-  private func terminateRunningService() {
-    for application in NSRunningApplication.runningApplications(
-      withBundleIdentifier: "net.pardev.CodexMonitor.Service")
-    {
-      application.terminate()
-    }
+  private func refreshServiceLaunchState() {
+    serviceLaunchAtLoginEnabled = CodexMonitorServiceLifecycle.isEnabled
   }
 
   private static func serviceEndpointText(
