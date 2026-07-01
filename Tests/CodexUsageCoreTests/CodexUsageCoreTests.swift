@@ -1,3 +1,5 @@
+import Darwin
+import Foundation
 import XCTest
 
 @testable import CodexUsageCore
@@ -299,6 +301,42 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(String(data: response.body, encoding: .utf8)?.contains("\"cards\"") == true)
   }
 
+  func testBeaconHTTPServerServesHealthEndpoint() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let service = CodexMonitorCollectionService(
+      settingsStore: CodexSettingsStore(settingsURL: directory.appendingPathComponent("settings.json")),
+      cache: CodexUsageCache(cacheURL: directory.appendingPathComponent("usage.json")),
+      fetcher: StubUsageFetcher(snapshots: []),
+      codexAuthStore: CodexAuthStore(environment: [:], secureStore: MemorySecureAuthStore(), legacyMonitorAuthFileURLs: []),
+      openRouterAPIKeyStore: OpenRouterAPIKeyStore(service: "test", account: "test", accessGroup: "")
+    )
+    let handler = BeaconHTTPRequestHandler(
+      service: service,
+      apiKeyValidator: MemoryBeaconAPIKeyStore(apiKey: "secret")
+    )
+    let server = BeaconHTTPServer(handler: handler)
+    let port = try Self.unusedLocalPort()
+    try server.start(port: port)
+    defer {
+      server.stop()
+    }
+
+    let url = try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/health"))
+    var lastError: Error?
+    for _ in 0..<20 {
+      do {
+        let (data, response) = try await URLSession.shared.data(from: url)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        XCTAssertEqual(String(data: data, encoding: .utf8), #"{"ok":true}"#)
+        return
+      } catch {
+        lastError = error
+        try await Task.sleep(nanoseconds: 100_000_000)
+      }
+    }
+    throw lastError ?? NSError(domain: "BeaconHTTPServerTest", code: 1)
+  }
+
   func testComputesNextRefreshDateFromEntryDate() {
     let entryDate = Date(timeIntervalSince1970: 1_800_000_000)
     let settings = CodexMonitorSettings(refreshIntervalMinutes: 15)
@@ -358,6 +396,67 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertFalse(source.contains("Text(date, style: .relative)"))
   }
 
+  func testWidgetReadsCacheOnlyAndDoesNotFetchProviderAPIs() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let widgetSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent(
+        "Sources/CodexMonitorWidget/CodexMonitorWidget.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(widgetSource.contains("cachedSnapshot(providerID: configuration.providerID)"))
+    XCTAssertTrue(widgetSource.contains("CodexUsageCache().loadSnapshots()"))
+    XCTAssertFalse(widgetSource.contains("fetchAndCacheSnapshot"))
+    XCTAssertFalse(widgetSource.contains("UsageProviderClient().fetchUsage"))
+    XCTAssertFalse(widgetSource.contains("OpenRouterAPIKeyStore()"))
+    XCTAssertFalse(widgetSource.contains("CodexAuthStore()"))
+  }
+
+  func testMacAppUsesCollectionServiceForRefreshes() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let appSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent(
+        "Sources/CodexMonitorApp/CodexMonitorApp.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(appSource.contains("private let service = CodexMonitorCollectionService()"))
+    XCTAssertTrue(appSource.contains("let nextSnapshots = try await service.refreshNow()"))
+    XCTAssertTrue(appSource.contains("snapshots = try await service.cachedSnapshots()"))
+    XCTAssertFalse(appSource.contains("private let client = UsageProviderClient()"))
+    XCTAssertFalse(appSource.contains("try cache.save(snapshots: nextSnapshots)"))
+  }
+
+  func testMacSettingsExposeBeaconAPIToggleAndKeyControls() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let appSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent(
+        "Sources/CodexMonitorApp/CodexMonitorApp.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(appSource.contains("Text(\"Beacon API\")"))
+    XCTAssertTrue(appSource.contains("Toggle(\"Enable Beacon API\""))
+    XCTAssertTrue(appSource.contains("Regenerate API Key"))
+    XCTAssertTrue(appSource.contains("serviceEndpointText"))
+    XCTAssertTrue(appSource.contains("syncServiceLaunchStateIfNeeded"))
+    XCTAssertTrue(appSource.contains("NSRunningApplication.runningApplications"))
+    XCTAssertFalse(appSource.contains("beaconHTTPServer"))
+    XCTAssertFalse(appSource.contains("startBeaconServerIfNeeded"))
+  }
+
   func testUsageBarsUseAccentableCustomWidgetFillAndReloadOnAppStart() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let repositoryRoot = testFile
@@ -394,7 +493,7 @@ final class CodexUsageCoreTests: XCTestCase {
     }
   }
 
-  func testCLIRefreshUsesEnabledProviderClientAndSavesAllSnapshots() throws {
+  func testCLIRefreshUsesCollectionServiceAndReadsCache() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let repositoryRoot = testFile
       .deletingLastPathComponent()
@@ -405,13 +504,31 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(cliSource.contains("UsageProviderClient().fetchUsage"))
+    XCTAssertTrue(cliSource.contains("CodexMonitorCollectionService"))
+    XCTAssertTrue(cliSource.contains("let snapshots = try await service.refreshNow()"))
     XCTAssertTrue(cliSource.contains("CodexKeychainAuthStore(accessGroup: \"\")"))
     XCTAssertTrue(cliSource.contains("OpenRouterAPIKeyStore(accessGroup: \"\")"))
-    XCTAssertTrue(cliSource.contains("settings: settingsStore.load()"))
-    XCTAssertTrue(cliSource.contains("try cache.save(snapshots: snapshots)"))
     XCTAssertTrue(cliSource.contains("try cache.loadSnapshots()"))
+    XCTAssertFalse(cliSource.contains("UsageProviderClient().fetchUsage"))
     XCTAssertFalse(cliSource.contains("try cache.save(snapshot: snapshot)"))
+  }
+
+  func testCLIExposesBeaconAPIManagementCommands() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let cliSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent("Sources/CodexUsageCLI/main.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(cliSource.contains("case \"service-status\":"))
+    XCTAssertTrue(cliSource.contains("case \"api-enabled\":"))
+    XCTAssertTrue(cliSource.contains("case \"api-key\":"))
+    XCTAssertTrue(cliSource.contains("CodexMonitorCollectionService"))
+    XCTAssertTrue(cliSource.contains("BeaconAPIKeyStore"))
   }
 
   func testCLIProvidersCommandManagesEnabledProviders() throws {
@@ -433,9 +550,28 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(cliSource.contains("try settingsStore.save(nextSettings)"))
     XCTAssertTrue(
       cliSource.contains(
-        "usage: codex-usage [login|refresh|print|cache-path|clear-auth|interval [minutes]|providers [provider ...]]"
+        "usage: codex-usage [login|refresh|print|cache-path|clear-auth|interval [minutes]|providers [provider ...]|service-status|api-enabled [on|off]|api-key [rotate]]"
       )
     )
+  }
+
+  func testProjectDefinesCodexMonitorServiceLoginItem() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let project = try String(
+      contentsOf: repositoryRoot.appendingPathComponent("project.yml"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(project.contains("CodexMonitorService:"))
+    XCTAssertTrue(project.contains("Sources/CodexMonitorService"))
+    XCTAssertTrue(project.contains("net.pardev.CodexMonitor.Service"))
+    XCTAssertTrue(project.contains("- target: CodexMonitorService"))
+    XCTAssertTrue(project.contains("$CONTENTS_FOLDER_PATH/Library/LoginItems"))
+    XCTAssertTrue(project.contains("CodexMonitorService.app was not built"))
   }
 
   func testCLITargetDoesNotRequireProvisionedKeychainEntitlement() throws {
@@ -455,6 +591,7 @@ final class CodexUsageCoreTests: XCTestCase {
     let cliSettings = String(project[cliTarget.lowerBound..<nextTarget.lowerBound])
 
     XCTAssertFalse(cliSettings.contains("CODE_SIGN_ENTITLEMENTS"))
+    XCTAssertTrue(cliSettings.contains("LD_RUNPATH_SEARCH_PATHS: \"$(inherited) @executable_path\""))
     XCTAssertFalse(
       FileManager.default.fileExists(
         atPath: repositoryRoot
@@ -689,6 +826,42 @@ final class CodexUsageCoreTests: XCTestCase {
     """
     {"type":"assistant","uuid":"\(uuid)","timestamp":"\(timestamp)","message":{"role":"assistant","model":"claude-opus-4-8","usage":{"input_tokens":\(input),"output_tokens":\(output),"cache_creation_input_tokens":\(cacheCreation),"cache_read_input_tokens":\(cacheRead),"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0}}}}
     """
+  }
+
+  private static func unusedLocalPort() throws -> UInt16 {
+    let descriptor = socket(AF_INET, SOCK_STREAM, 0)
+    guard descriptor >= 0 else {
+      throw POSIXError(.init(rawValue: errno) ?? .EIO)
+    }
+    defer {
+      close(descriptor)
+    }
+
+    var address = sockaddr_in()
+    address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+    address.sin_family = sa_family_t(AF_INET)
+    address.sin_port = 0
+    address.sin_addr = in_addr(s_addr: INADDR_LOOPBACK.bigEndian)
+
+    let bindResult = withUnsafePointer(to: &address) { pointer in
+      pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { socketAddress in
+        Darwin.bind(descriptor, socketAddress, socklen_t(MemoryLayout<sockaddr_in>.size))
+      }
+    }
+    guard bindResult == 0 else {
+      throw POSIXError(.init(rawValue: errno) ?? .EIO)
+    }
+
+    var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+    let nameResult = withUnsafeMutablePointer(to: &address) { pointer in
+      pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { socketAddress in
+        getsockname(descriptor, socketAddress, &length)
+      }
+    }
+    guard nameResult == 0 else {
+      throw POSIXError(.init(rawValue: errno) ?? .EIO)
+    }
+    return UInt16(bigEndian: address.sin_port)
   }
 }
 

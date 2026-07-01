@@ -111,6 +111,16 @@ API key lookup order:
 
 No authentication required. Reads the last 2MB of up to 12 most-recent `.jsonl` session files under `~/.claude/projects/`, extracting token counts from `type: "assistant"` records.
 
+## Beacon API
+
+Codex Monitor can expose a disabled-by-default local Beacon API from the macOS service.
+The API is off by default. Enable it in Settings, enable the launch service, then
+configure Beacon firmware with the displayed LAN URL and generated API key. The
+`localhost` URL is only for curl checks running on the Mac itself.
+
+Widgets and the app read the shared cache directly. Beacon reads the same cache
+through the local HTTP API.
+
 ## CLI
 
 Build and use the `codex-usage` CLI:
@@ -126,6 +136,9 @@ build/DerivedData/Build/Products/Debug/codex-usage cache-path    # Show cache fi
 build/DerivedData/Build/Products/Debug/codex-usage clear-auth    # Remove stored credentials
 build/DerivedData/Build/Products/Debug/codex-usage interval      # Show refresh interval
 build/DerivedData/Build/Products/Debug/codex-usage interval 30   # Set interval to 30 min
+build/DerivedData/Build/Products/Debug/codex-usage service-status # Print service status JSON
+build/DerivedData/Build/Products/Debug/codex-usage api-enabled on # Enable Beacon API setting
+build/DerivedData/Build/Products/Debug/codex-usage api-key        # Print Beacon API key
 ```
 
 ## Architecture

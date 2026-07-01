@@ -77,34 +77,27 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
   func snapshot(for configuration: CodexWidgetConfigurationIntent, in context: Context) async
     -> CodexUsageEntry
   {
-    await loadEntry(providerID: configuration.providerID, refreshFromAPI: false)
+    await loadEntry(configuration: configuration, refreshFromAPI: false)
   }
 
   func timeline(for configuration: CodexWidgetConfigurationIntent, in context: Context) async
     -> Timeline<CodexUsageEntry>
   {
-    let entry = await loadEntry(providerID: configuration.providerID, refreshFromAPI: true)
+    let entry = await loadEntry(configuration: configuration, refreshFromAPI: true)
     return Timeline(entries: countdownEntries(from: entry), policy: .after(entry.nextRefreshAt))
   }
 
-  private func loadEntry(providerID: CodexUsageProviderID, refreshFromAPI: Bool) async
+  private func loadEntry(configuration: CodexWidgetConfigurationIntent, refreshFromAPI: Bool) async
     -> CodexUsageEntry
   {
+    _ = refreshFromAPI
     let date = Date()
     let settings = CodexSettingsStore().load()
-    if refreshFromAPI, let snapshot = await fetchAndCacheSnapshot(providerID: providerID) {
-      return CodexUsageEntry(
-        date: date,
-        nextRefreshAt: settings.nextRefreshDate(after: date),
-        providerID: providerID,
-        snapshots: [snapshot]
-      )
-    }
     return CodexUsageEntry(
       date: date,
       nextRefreshAt: settings.nextRefreshDate(after: date),
-      providerID: providerID,
-      snapshots: cachedSnapshot(providerID: providerID).map { [$0] } ?? []
+      providerID: configuration.providerID,
+      snapshots: cachedSnapshot(providerID: configuration.providerID).map { [$0] } ?? []
     )
   }
 
@@ -135,49 +128,12 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
     )
   }
 
-  private func fetchAndCacheSnapshot(providerID: CodexUsageProviderID) async -> CodexUsageSnapshot? {
-    do {
-      let settings = CodexSettingsStore().load()
-      let providerSettings = CodexMonitorSettings(
-        refreshIntervalMinutes: settings.refreshIntervalMinutes,
-        enabledProviders: [providerID]
-      )
-      let snapshots = try await UsageProviderClient().fetchUsage(
-        settings: providerSettings,
-        codexAuthStore: CodexAuthStore(),
-        openRouterAPIKeyStore: OpenRouterAPIKeyStore()
-      )
-      guard let snapshot = snapshots.first(where: { $0.provider == providerID.rawValue }) else {
-        return nil
-      }
-      try saveMerged(snapshot)
-      return snapshot
-    } catch {
-      return nil
-    }
-  }
-
   private func cachedSnapshot(providerID: CodexUsageProviderID) -> CodexUsageSnapshot? {
     cachedSnapshots().first { $0.provider == providerID.rawValue }
   }
 
   private func cachedSnapshots() -> [CodexUsageSnapshot] {
     (try? CodexUsageCache().loadSnapshots()) ?? []
-  }
-
-  private func saveMerged(_ snapshot: CodexUsageSnapshot) throws {
-    let cache = CodexUsageCache()
-    var snapshots = (try? cache.loadSnapshots()) ?? []
-    snapshots.removeAll { $0.provider == snapshot.provider }
-    snapshots.append(snapshot)
-    snapshots.sort { lhs, rhs in
-      providerSortIndex(lhs.provider) < providerSortIndex(rhs.provider)
-    }
-    try cache.save(snapshots: snapshots)
-  }
-
-  private func providerSortIndex(_ rawValue: String) -> Int {
-    CodexUsageProviderID.allCases.firstIndex { $0.rawValue == rawValue } ?? Int.max
   }
 }
 

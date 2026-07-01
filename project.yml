@@ -40,6 +40,7 @@ targets:
       - target: CodexUsageCore
     settings:
       base:
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path"
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
         PRODUCT_NAME: codex-usage
   CodexMonitor:
@@ -49,9 +50,25 @@ targets:
       - Sources/CodexMonitorApp
     dependencies:
       - target: CodexUsageCore
+      - target: CodexMonitorService
+        embed: false
       - target: CodexMonitorWidgetExtension
         embed: true
         codeSign: true
+    postBuildScripts:
+      - name: Embed Login Item
+        script: |
+          set -euo pipefail
+          LOGIN_ITEMS_DIR="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LoginItems"
+          mkdir -p "$LOGIN_ITEMS_DIR"
+          if [ ! -d "$BUILT_PRODUCTS_DIR/CodexMonitorService.app" ]; then
+            echo "CodexMonitorService.app was not built"
+            exit 1
+          fi
+          rm -rf "$LOGIN_ITEMS_DIR/CodexMonitorService.app"
+          cp -R "$BUILT_PRODUCTS_DIR/CodexMonitorService.app" "$LOGIN_ITEMS_DIR/"
+        outputFiles:
+          - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LoginItems/CodexMonitorService.app"
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -60,6 +77,20 @@ targets:
         ENABLE_DEBUG_DYLIB: false
         INFOPLIST_FILE: Sources/CodexMonitorApp/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: net.pardev.CodexMonitor
+  CodexMonitorService:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/CodexMonitorService
+    dependencies:
+      - target: CodexUsageCore
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: Sources/CodexMonitorService/CodexMonitorService.entitlements
+        ENABLE_APP_SANDBOX: true
+        ENABLE_DEBUG_DYLIB: false
+        INFOPLIST_FILE: Sources/CodexMonitorService/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: net.pardev.CodexMonitor.Service
   CodexMonitorWidgetExtension:
     type: app-extension
     platform: macOS
@@ -132,6 +163,7 @@ schemes:
     build:
       targets:
         CodexMonitor: all
+        CodexMonitorService: all
         CodexUsageCLI: all
         CodexUsageCoreTests: [test]
     run:

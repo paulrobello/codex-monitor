@@ -1,4 +1,6 @@
 import CodexUsageCore
+import Darwin
+import ServiceManagement
 import SwiftUI
 import WidgetKit
 
@@ -82,18 +84,28 @@ final class UsageStore: ObservableObject {
   @Published var errorMessage: String?
   @Published private(set) var settings: CodexMonitorSettings
   @Published private(set) var nextRefreshAt: Date?
+  @Published private(set) var beaconAPIURLText = "Beacon API disabled"
+  @Published private(set) var hasBeaconAPIKey = false
+  @Published private(set) var serviceLaunchAtLoginEnabled = false
 
   private let authStore = CodexAuthStore()
   private let openRouterAPIKeyStore = OpenRouterAPIKeyStore()
-  private let client = UsageProviderClient()
-  private let cache = CodexUsageCache()
+  private let service = CodexMonitorCollectionService()
   private let settingsStore = CodexSettingsStore()
+  private let beaconAPIKeyStore = BeaconAPIKeyStore()
   private var refreshLoop: Task<Void, Never>?
 
   init() {
     self.settings = CodexSettingsStore().load()
     self.isCodexSignedIn = authStore.hasCredentials()
     self.hasOpenRouterAPIKey = openRouterAPIKeyStore.hasAPIKey()
+    self.serviceLaunchAtLoginEnabled =
+      SMAppService.loginItem(identifier: "net.pardev.CodexMonitor.Service").status == .enabled
+    self.hasBeaconAPIKey = (try? beaconAPIKeyStore.currentOrCreateAPIKey()) != nil
+    self.beaconAPIURLText = Self.serviceEndpointText(
+      settings: settings,
+      serviceLaunchAtLoginEnabled: serviceLaunchAtLoginEnabled
+    )
   }
 
   deinit {
@@ -131,6 +143,7 @@ final class UsageStore: ObservableObject {
 
   func start() {
     WidgetCenter.shared.reloadAllTimelines()
+    syncServiceLaunchStateIfNeeded()
     restartRefreshLoop(runImmediately: true)
   }
 
@@ -141,7 +154,7 @@ final class UsageStore: ObservableObject {
 
   func loadCached() async {
     do {
-      snapshots = try cache.loadSnapshots()
+      snapshots = try await service.cachedSnapshots()
     } catch {
       errorMessage = error.localizedDescription
     }
@@ -155,12 +168,7 @@ final class UsageStore: ObservableObject {
     }
 
     do {
-      let nextSnapshots = try await client.fetchUsage(
-        settings: settings,
-        codexAuthStore: authStore,
-        openRouterAPIKeyStore: openRouterAPIKeyStore
-      )
-      try cache.save(snapshots: nextSnapshots)
+      let nextSnapshots = try await service.refreshNow()
       snapshots = nextSnapshots
       nextRefreshAt = settings.nextRefreshDate(after: Date())
       isCodexSignedIn = authStore.hasCredentials()
@@ -206,17 +214,14 @@ final class UsageStore: ObservableObject {
   func setRefreshInterval(minutes: Int) {
     let nextSettings = CodexMonitorSettings(
       refreshIntervalMinutes: minutes,
-      enabledProviders: settings.enabledProviders
+      enabledProviders: settings.enabledProviders,
+      beaconAPIEnabled: settings.beaconAPIEnabled,
+      beaconAPIPort: settings.beaconAPIPort
     )
-    do {
-      try settingsStore.save(nextSettings)
-      settings = nextSettings
-      nextRefreshAt = nextSettings.nextRefreshDate(after: Date())
-      WidgetCenter.shared.reloadAllTimelines()
-      restartRefreshLoop(runImmediately: false)
-    } catch {
-      errorMessage = error.localizedDescription
-    }
+    saveSettingsAndApplyBeaconAPI(nextSettings)
+    nextRefreshAt = nextSettings.nextRefreshDate(after: Date())
+    WidgetCenter.shared.reloadAllTimelines()
+    restartRefreshLoop(runImmediately: false)
   }
 
   func setProvider(_ provider: CodexUsageProviderID, enabled: Bool) {
@@ -228,15 +233,57 @@ final class UsageStore: ObservableObject {
     }
     let nextSettings = CodexMonitorSettings(
       refreshIntervalMinutes: settings.refreshIntervalMinutes,
-      enabledProviders: providers
+      enabledProviders: providers,
+      beaconAPIEnabled: settings.beaconAPIEnabled,
+      beaconAPIPort: settings.beaconAPIPort
     )
+    saveSettingsAndApplyBeaconAPI(nextSettings)
+    WidgetCenter.shared.reloadAllTimelines()
+    Task {
+      await refresh()
+    }
+  }
+
+  func setBeaconAPIEnabled(_ enabled: Bool) {
+    let nextSettings = CodexMonitorSettings(
+      refreshIntervalMinutes: settings.refreshIntervalMinutes,
+      enabledProviders: settings.enabledProviders,
+      beaconAPIEnabled: enabled,
+      beaconAPIPort: settings.beaconAPIPort
+    )
+    saveSettingsAndApplyBeaconAPI(nextSettings)
+  }
+
+  func setBeaconAPIPort(_ port: Int) {
+    let nextSettings = CodexMonitorSettings(
+      refreshIntervalMinutes: settings.refreshIntervalMinutes,
+      enabledProviders: settings.enabledProviders,
+      beaconAPIEnabled: settings.beaconAPIEnabled,
+      beaconAPIPort: port
+    )
+    saveSettingsAndApplyBeaconAPI(nextSettings)
+  }
+
+  func regenerateBeaconAPIKey() {
     do {
-      try settingsStore.save(nextSettings)
-      settings = nextSettings
-      WidgetCenter.shared.reloadAllTimelines()
-      Task {
-        await refresh()
+      try beaconAPIKeyStore.clear()
+      _ = try beaconAPIKeyStore.currentOrCreateAPIKey()
+      hasBeaconAPIKey = true
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  func setServiceLaunchAtLogin(_ enabled: Bool) {
+    do {
+      if enabled {
+        try SMAppService.loginItem(identifier: "net.pardev.CodexMonitor.Service").register()
+      } else {
+        try SMAppService.loginItem(identifier: "net.pardev.CodexMonitor.Service").unregister()
+        terminateRunningService()
       }
+      serviceLaunchAtLoginEnabled = enabled
+      updateBeaconAPIState()
     } catch {
       errorMessage = error.localizedDescription
     }
@@ -280,6 +327,112 @@ final class UsageStore: ObservableObject {
         }
       }
     }
+  }
+
+  private func saveSettingsAndApplyBeaconAPI(_ nextSettings: CodexMonitorSettings) {
+    do {
+      try settingsStore.save(nextSettings)
+      settings = nextSettings
+      updateBeaconAPIState()
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  private func updateBeaconAPIState() {
+    if settings.beaconAPIEnabled {
+      do {
+        _ = try beaconAPIKeyStore.currentOrCreateAPIKey()
+        hasBeaconAPIKey = true
+      } catch {
+        errorMessage = error.localizedDescription
+      }
+    }
+    beaconAPIURLText = Self.serviceEndpointText(
+      settings: settings,
+      serviceLaunchAtLoginEnabled: serviceLaunchAtLoginEnabled
+    )
+    syncServiceLaunchStateIfNeeded()
+  }
+
+  private func syncServiceLaunchStateIfNeeded() {
+    if serviceLaunchAtLoginEnabled && settings.beaconAPIEnabled {
+      restartRunningService()
+    }
+  }
+
+  private func restartRunningService() {
+    terminateRunningService()
+    do {
+      try SMAppService.loginItem(identifier: "net.pardev.CodexMonitor.Service").register()
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  private func terminateRunningService() {
+    for application in NSRunningApplication.runningApplications(
+      withBundleIdentifier: "net.pardev.CodexMonitor.Service")
+    {
+      application.terminate()
+    }
+  }
+
+  private static func serviceEndpointText(
+    settings: CodexMonitorSettings,
+    serviceLaunchAtLoginEnabled: Bool
+  ) -> String {
+    guard settings.beaconAPIEnabled else {
+      return "Beacon API disabled"
+    }
+    let localURL = "http://localhost:\(settings.beaconAPIPort)"
+    guard serviceLaunchAtLoginEnabled else {
+      return "Enable launch service to serve \(localURL)"
+    }
+    guard let host = firstLANIPv4Address() else {
+      return "Beacon API service: \(localURL); use this Mac's LAN IP for Beacon firmware"
+    }
+    return "Beacon API service: http://\(host):\(settings.beaconAPIPort) (local: \(localURL))"
+  }
+
+  private static func firstLANIPv4Address() -> String? {
+    var interfaces: UnsafeMutablePointer<ifaddrs>?
+    guard getifaddrs(&interfaces) == 0, let firstInterface = interfaces else {
+      return nil
+    }
+    defer {
+      freeifaddrs(interfaces)
+    }
+
+    var cursor: UnsafeMutablePointer<ifaddrs>? = firstInterface
+    while let interface = cursor {
+      defer {
+        cursor = interface.pointee.ifa_next
+      }
+      let flags = Int32(interface.pointee.ifa_flags)
+      guard
+        flags & IFF_UP == IFF_UP,
+        flags & IFF_LOOPBACK == 0,
+        interface.pointee.ifa_addr.pointee.sa_family == UInt8(AF_INET)
+      else {
+        continue
+      }
+
+      var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+      let result = getnameinfo(
+        interface.pointee.ifa_addr,
+        socklen_t(interface.pointee.ifa_addr.pointee.sa_len),
+        &hostname,
+        socklen_t(hostname.count),
+        nil,
+        0,
+        NI_NUMERICHOST
+      )
+      if result == 0 {
+        return String(cString: hostname)
+      }
+    }
+    return nil
   }
 }
 
@@ -414,6 +567,24 @@ struct SettingsView: View {
 
       Divider()
 
+      VStack(alignment: .leading, spacing: 8) {
+        Text("Beacon API")
+          .font(.headline)
+        Toggle("Enable Beacon API", isOn: beaconAPIEnabledBinding)
+        Text(store.beaconAPIURLText)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .textSelection(.enabled)
+        Stepper("Port \(store.settings.beaconAPIPort)", value: beaconAPIPortBinding, in: 1024...65535)
+        Button("Regenerate API Key") {
+          store.regenerateBeaconAPIKey()
+        }
+        .disabled(!store.settings.beaconAPIEnabled)
+        Toggle("Launch service at login", isOn: serviceLaunchAtLoginBinding)
+      }
+
+      Divider()
+
       HStack {
         VStack(alignment: .leading, spacing: 4) {
           Text("Codex Auth")
@@ -449,6 +620,27 @@ struct SettingsView: View {
     Binding(
       get: { store.settings.enabledProviders.contains(provider) },
       set: { store.setProvider(provider, enabled: $0) }
+    )
+  }
+
+  private var beaconAPIEnabledBinding: Binding<Bool> {
+    Binding(
+      get: { store.settings.beaconAPIEnabled },
+      set: { store.setBeaconAPIEnabled($0) }
+    )
+  }
+
+  private var beaconAPIPortBinding: Binding<Int> {
+    Binding(
+      get: { store.settings.beaconAPIPort },
+      set: { store.setBeaconAPIPort($0) }
+    )
+  }
+
+  private var serviceLaunchAtLoginBinding: Binding<Bool> {
+    Binding(
+      get: { store.serviceLaunchAtLoginEnabled },
+      set: { store.setServiceLaunchAtLogin($0) }
     )
   }
 }

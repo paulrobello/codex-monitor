@@ -13,6 +13,13 @@ struct CodexUsageCLI {
     let openRouterAPIKeyStore = OpenRouterAPIKeyStore(accessGroup: "")
     let cache = CodexUsageCache()
     let settingsStore = CodexSettingsStore()
+    let service = CodexMonitorCollectionService(
+      settingsStore: settingsStore,
+      cache: cache,
+      codexAuthStore: authStore,
+      openRouterAPIKeyStore: openRouterAPIKeyStore
+    )
+    let beaconAPIKeyStore = BeaconAPIKeyStore(accessGroup: "")
 
     do {
       switch command {
@@ -22,12 +29,7 @@ struct CodexUsageCLI {
           credentials.accountId.map { "Signed in to Codex account \($0)." } ?? "Signed in to Codex."
         )
       case "refresh":
-        let snapshots = try await UsageProviderClient().fetchUsage(
-          settings: settingsStore.load(),
-          codexAuthStore: authStore,
-          openRouterAPIKeyStore: openRouterAPIKeyStore
-        )
-        try cache.save(snapshots: snapshots)
+        let snapshots = try await service.refreshNow()
         print(String(data: try JSONEncoder.codexMonitor.encode(snapshots), encoding: .utf8) ?? "[]")
       case "print":
         let snapshots = try cache.loadSnapshots()
@@ -45,7 +47,13 @@ struct CodexUsageCLI {
         print("Cleared Codex Monitor auth from \(authStore.authStorageDescription).")
       case "interval":
         if let rawValue = arguments.dropFirst().first, let minutes = Int(rawValue) {
-          let settings = CodexMonitorSettings(refreshIntervalMinutes: minutes)
+          let currentSettings = settingsStore.load()
+          let settings = CodexMonitorSettings(
+            refreshIntervalMinutes: minutes,
+            enabledProviders: currentSettings.enabledProviders,
+            beaconAPIEnabled: currentSettings.beaconAPIEnabled,
+            beaconAPIPort: currentSettings.beaconAPIPort
+          )
           try settingsStore.save(settings)
           print("Usage refresh interval set to \(settings.refreshIntervalMinutes) minutes.")
         } else {
@@ -69,14 +77,39 @@ struct CodexUsageCLI {
           }
           let nextSettings = CodexMonitorSettings(
             refreshIntervalMinutes: settings.refreshIntervalMinutes,
-            enabledProviders: providers
+            enabledProviders: providers,
+            beaconAPIEnabled: settings.beaconAPIEnabled,
+            beaconAPIPort: settings.beaconAPIPort
           )
           try settingsStore.save(nextSettings)
           print(nextSettings.enabledProviders.map(\.rawValue).joined(separator: ","))
         }
+      case "service-status":
+        let status = await service.status()
+        print(String(data: try JSONEncoder.codexMonitor.encode(status), encoding: .utf8) ?? "{}")
+      case "api-enabled":
+        let settings = settingsStore.load()
+        if let rawValue = arguments.dropFirst().first {
+          let enabled = rawValue == "true" || rawValue == "on" || rawValue == "1"
+          let nextSettings = CodexMonitorSettings(
+            refreshIntervalMinutes: settings.refreshIntervalMinutes,
+            enabledProviders: settings.enabledProviders,
+            beaconAPIEnabled: enabled,
+            beaconAPIPort: settings.beaconAPIPort
+          )
+          try settingsStore.save(nextSettings)
+          print(enabled ? "on" : "off")
+        } else {
+          print(settings.beaconAPIEnabled ? "on" : "off")
+        }
+      case "api-key":
+        if arguments.dropFirst().first == "rotate" {
+          try beaconAPIKeyStore.clear()
+        }
+        print(try beaconAPIKeyStore.currentOrCreateAPIKey())
       default:
         eprint(
-          "usage: codex-usage [login|refresh|print|cache-path|clear-auth|interval [minutes]|providers [provider ...]]"
+          "usage: codex-usage [login|refresh|print|cache-path|clear-auth|interval [minutes]|providers [provider ...]|service-status|api-enabled [on|off]|api-key [rotate]]"
         )
         exit(2)
       }
