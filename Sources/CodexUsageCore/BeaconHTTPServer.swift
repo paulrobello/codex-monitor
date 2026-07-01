@@ -117,11 +117,26 @@ public final class BeaconHTTPServer: @unchecked Sendable {
   public func start(port: UInt16) throws {
     stop()
     let listener = try NWListener(using: .tcp, on: NWEndpoint.Port(rawValue: port)!)
+    let startProbe = BeaconHTTPListenerStartProbe()
+    listener.stateUpdateHandler = { state in
+      switch state {
+      case .ready:
+        startProbe.markReady()
+      case .failed(let error):
+        startProbe.markFailed(error)
+      default:
+        break
+      }
+    }
     listener.newConnectionHandler = { [handler, queue] connection in
       connection.start(queue: queue)
       Self.receiveRequest(on: connection, handler: handler)
     }
     listener.start(queue: queue)
+    if case .failed(let error) = startProbe.wait(timeout: .now() + 1) {
+      listener.cancel()
+      throw BeaconHTTPServerError.startFailed(port: port, reason: String(describing: error))
+    }
     self.listener = listener
   }
 
@@ -198,6 +213,59 @@ public final class BeaconHTTPServer: @unchecked Sendable {
       return "Internal Server Error"
     default:
       return "OK"
+    }
+  }
+}
+
+private final class BeaconHTTPListenerStartProbe: @unchecked Sendable {
+  enum Result {
+    case ready
+    case failed(NWError)
+  }
+
+  private let lock = NSLock()
+  private let semaphore = DispatchSemaphore(value: 0)
+  private var result: Result?
+
+  func markReady() {
+    complete(.ready)
+  }
+
+  func markFailed(_ error: NWError) {
+    complete(.failed(error))
+  }
+
+  func wait(timeout: DispatchTime) -> Result? {
+    guard semaphore.wait(timeout: timeout) == .success else {
+      return nil
+    }
+    lock.lock()
+    defer {
+      lock.unlock()
+    }
+    return result
+  }
+
+  private func complete(_ nextResult: Result) {
+    lock.lock()
+    defer {
+      lock.unlock()
+    }
+    guard result == nil else {
+      return
+    }
+    result = nextResult
+    semaphore.signal()
+  }
+}
+
+private enum BeaconHTTPServerError: LocalizedError {
+  case startFailed(port: UInt16, reason: String)
+
+  var errorDescription: String? {
+    switch self {
+    case .startFailed(let port, let reason):
+      return "Could not start Beacon API server on port \(port): \(reason)"
     }
   }
 }

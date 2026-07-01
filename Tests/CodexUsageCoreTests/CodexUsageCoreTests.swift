@@ -337,6 +337,29 @@ final class CodexUsageCoreTests: XCTestCase {
     throw lastError ?? NSError(domain: "BeaconHTTPServerTest", code: 1)
   }
 
+  func testBeaconHTTPServerStartThrowsWhenPortIsUnavailable() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let service = CodexMonitorCollectionService(
+      settingsStore: CodexSettingsStore(settingsURL: directory.appendingPathComponent("settings.json")),
+      cache: CodexUsageCache(cacheURL: directory.appendingPathComponent("usage.json")),
+      fetcher: StubUsageFetcher(snapshots: []),
+      codexAuthStore: CodexAuthStore(environment: [:], secureStore: MemorySecureAuthStore(), legacyMonitorAuthFileURLs: []),
+      openRouterAPIKeyStore: OpenRouterAPIKeyStore(service: "test", account: "test", accessGroup: "")
+    )
+    let handler = BeaconHTTPRequestHandler(
+      service: service,
+      apiKeyValidator: MemoryBeaconAPIKeyStore(apiKey: "secret")
+    )
+    let server = BeaconHTTPServer(handler: handler)
+    let occupiedSocket = try Self.boundLocalSocket()
+    defer {
+      close(occupiedSocket.descriptor)
+      server.stop()
+    }
+
+    XCTAssertThrowsError(try server.start(port: occupiedSocket.port))
+  }
+
   func testComputesNextRefreshDateFromEntryDate() {
     let entryDate = Date(timeIntervalSince1970: 1_800_000_000)
     let settings = CodexMonitorSettings(refreshIntervalMinutes: 15)
@@ -866,12 +889,15 @@ final class CodexUsageCoreTests: XCTestCase {
   }
 
   private static func unusedLocalPort() throws -> UInt16 {
+    let socket = try boundLocalSocket()
+    close(socket.descriptor)
+    return socket.port
+  }
+
+  private static func boundLocalSocket() throws -> (descriptor: Int32, port: UInt16) {
     let descriptor = socket(AF_INET, SOCK_STREAM, 0)
     guard descriptor >= 0 else {
       throw POSIXError(.init(rawValue: errno) ?? .EIO)
-    }
-    defer {
-      close(descriptor)
     }
 
     var address = sockaddr_in()
@@ -886,6 +912,11 @@ final class CodexUsageCoreTests: XCTestCase {
       }
     }
     guard bindResult == 0 else {
+      close(descriptor)
+      throw POSIXError(.init(rawValue: errno) ?? .EIO)
+    }
+    guard listen(descriptor, 1) == 0 else {
+      close(descriptor)
       throw POSIXError(.init(rawValue: errno) ?? .EIO)
     }
 
@@ -896,9 +927,10 @@ final class CodexUsageCoreTests: XCTestCase {
       }
     }
     guard nameResult == 0 else {
+      close(descriptor)
       throw POSIXError(.init(rawValue: errno) ?? .EIO)
     }
-    return UInt16(bigEndian: address.sin_port)
+    return (descriptor, UInt16(bigEndian: address.sin_port))
   }
 }
 

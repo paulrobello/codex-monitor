@@ -106,8 +106,7 @@ enum CodexMonitorServiceCommand {
   private static func registerService() throws {
     let service = SMAppService.loginItem(identifier: serviceIdentifier)
     if service.status == .enabled {
-      print("CodexMonitorService login item already enabled.")
-      return
+      try service.unregister()
     }
     try service.register()
     guard service.status == .enabled else {
