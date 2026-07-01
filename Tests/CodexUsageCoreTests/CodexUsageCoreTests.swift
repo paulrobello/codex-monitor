@@ -146,6 +146,30 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(decoded.beaconAccentColor(for: .openRouter), CodexUsageProviderID.openRouter.beaconAccentColor)
   }
 
+  func testSnapshotsFilterToEnabledProviders() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let snapshots = [
+      CodexUsageSnapshot(
+        provider: CodexUsageProviderID.openAICodex.rawValue,
+        fetchedAt: now,
+        fiveHour: CodexUsageWindow(label: "5h", remainingPercent: 88, resetAt: nil),
+        weekly: nil
+      ),
+      CodexUsageSnapshot(
+        provider: CodexUsageProviderID.openRouter.rawValue,
+        fetchedAt: now,
+        fiveHour: CodexUsageWindow(label: "Credits", remainingPercent: 74, resetAt: nil),
+        weekly: nil
+      ),
+    ]
+    let settings = CodexMonitorSettings(enabledProviders: [.openRouter])
+
+    XCTAssertEqual(
+      snapshots.filteringDisabledProviders(settings: settings).map(\.provider),
+      [CodexUsageProviderID.openRouter.rawValue]
+    )
+  }
+
   func testServiceStatusEncodesRefreshState() throws {
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     let status = CodexMonitorServiceStatus(
@@ -588,12 +612,28 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(widgetSource.contains("cachedSnapshot(providerID: configuration.providerID)"))
+    XCTAssertTrue(widgetSource.contains("cachedSnapshot(providerID: configuration.providerID, settings: settings)"))
     XCTAssertTrue(widgetSource.contains("CodexUsageCache().loadSnapshots()"))
     XCTAssertFalse(widgetSource.contains("fetchAndCacheSnapshot"))
     XCTAssertFalse(widgetSource.contains("UsageProviderClient().fetchUsage"))
     XCTAssertFalse(widgetSource.contains("OpenRouterAPIKeyStore()"))
     XCTAssertFalse(widgetSource.contains("CodexAuthStore()"))
+  }
+
+  func testWidgetFiltersCachedSnapshotsToEnabledProviders() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let widgetSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent(
+        "Sources/CodexMonitorWidget/CodexMonitorWidget.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(widgetSource.contains("cachedSnapshot(providerID: configuration.providerID, settings: settings)"))
+    XCTAssertTrue(widgetSource.contains("filteringDisabledProviders(settings: settings)"))
   }
 
   func testMacAppUsesCollectionServiceForRefreshes() throws {

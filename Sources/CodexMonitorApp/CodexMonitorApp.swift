@@ -43,8 +43,8 @@ struct CodexMonitorApp: App {
     }
 
     MenuBarExtra("Codex", systemImage: store.menuBarSymbolName) {
-      if !store.snapshots.isEmpty {
-        ForEach(store.snapshots, id: \.provider) { snapshot in
+      if !store.displayedSnapshots.isEmpty {
+        ForEach(store.displayedSnapshots, id: \.provider) { snapshot in
           UsageSummaryView(snapshot: snapshot, compact: true, showProviderName: true)
         }
         Divider()
@@ -190,7 +190,7 @@ final class UsageStore: ObservableObject {
   var menuBarSymbolName: String {
     guard
       let lowestRemaining = [
-        snapshots.flatMap { [$0.fiveHour?.remainingPercent, $0.weekly?.remainingPercent] }
+        displayedSnapshots.flatMap { [$0.fiveHour?.remainingPercent, $0.weekly?.remainingPercent] }
       ].flatMap { $0 }.compactMap({ $0 }).min()
     else {
       return "gauge.with.dots.needle.bottom.50percent"
@@ -214,6 +214,10 @@ final class UsageStore: ObservableObject {
 
   var shouldShowCodexSignIn: Bool {
     settings.enabledProviders.contains(.openAICodex) && !isCodexSignedIn
+  }
+
+  var displayedSnapshots: [CodexUsageSnapshot] {
+    snapshots.filteringDisabledProviders(settings: settings)
   }
 
   func start() {
@@ -567,8 +571,8 @@ struct ContentView: View {
         .disabled(store.isRefreshing)
       }
 
-      if !store.snapshots.isEmpty {
-        ForEach(store.snapshots, id: \.provider) { snapshot in
+      if !store.displayedSnapshots.isEmpty {
+        ForEach(store.displayedSnapshots, id: \.provider) { snapshot in
           UsageSummaryView(snapshot: snapshot, showProviderName: true)
         }
       } else {

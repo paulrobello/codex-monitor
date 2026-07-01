@@ -80,6 +80,10 @@ final class iOSUsageStore: ObservableObject {
     settings.enabledProviders.contains(.openAICodex) && !isCodexSignedIn
   }
 
+  var displayedSnapshots: [CodexUsageSnapshot] {
+    snapshots.filteringDisabledProviders(settings: settings)
+  }
+
   func start() {
     WidgetCenter.shared.reloadAllTimelines()
     restartRefreshLoop(runImmediately: true)
@@ -322,8 +326,8 @@ struct iOSContentView: View {
     NavigationStack {
       List {
         Section {
-          if !store.snapshots.isEmpty {
-            ForEach(store.snapshots, id: \.provider) { snapshot in
+          if !store.displayedSnapshots.isEmpty {
+            ForEach(store.displayedSnapshots, id: \.provider) { snapshot in
               iOSUsageSummaryView(
                 snapshot: snapshot,
                 nextRefreshAt: store.nextRefreshAt,

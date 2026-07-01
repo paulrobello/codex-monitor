@@ -101,7 +101,8 @@ public actor CodexMonitorCollectionService {
   }
 
   public func cachedSnapshots() throws -> [CodexUsageSnapshot] {
-    try cache.loadSnapshots()
+    let settings = settingsStore.load()
+    return try cache.loadSnapshots().filteringDisabledProviders(settings: settings)
   }
 
   public func beaconPayload(
@@ -110,7 +111,7 @@ public actor CodexMonitorCollectionService {
   ) throws -> BeaconPayload {
     let settings = settingsStore.load()
     return BeaconPayload.fromSnapshots(
-      try cache.loadSnapshots(),
+      try cache.loadSnapshots().filteringDisabledProviders(settings: settings),
       generatedAt: generatedAt,
       deviceID: deviceID,
       providerColors: settings.beaconProviderColors
@@ -127,13 +128,14 @@ public actor CodexMonitorCollectionService {
       refreshState: refreshState,
       refreshMessage: refreshMessage,
       refreshCount: refreshCount,
-      providerCount: (try? cache.loadSnapshots().count) ?? 0
+      providerCount: (try? cachedSnapshots().count) ?? 0
     )
   }
 
   public func beaconStatus(deviceID: String = "beacon-dev", now: Date = Date()) -> BeaconAPIStatus {
     let settings = settingsStore.load()
-    let snapshots = (try? cache.loadSnapshots()) ?? []
+    let snapshots =
+      ((try? cache.loadSnapshots()) ?? []).filteringDisabledProviders(settings: settings)
     let providers = snapshots.map { snapshot in
       BeaconProviderStatus(
         provider: snapshot.provider,

@@ -97,7 +97,7 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
       date: date,
       nextRefreshAt: settings.nextRefreshDate(after: date),
       providerID: configuration.providerID,
-      snapshots: cachedSnapshot(providerID: configuration.providerID).map { [$0] } ?? []
+      snapshots: cachedSnapshot(providerID: configuration.providerID, settings: settings).map { [$0] } ?? []
     )
   }
 
@@ -128,8 +128,13 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
     )
   }
 
-  private func cachedSnapshot(providerID: CodexUsageProviderID) -> CodexUsageSnapshot? {
-    cachedSnapshots().first { $0.provider == providerID.rawValue }
+  private func cachedSnapshot(
+    providerID: CodexUsageProviderID,
+    settings: CodexMonitorSettings
+  ) -> CodexUsageSnapshot? {
+    cachedSnapshots()
+      .filteringDisabledProviders(settings: settings)
+      .first { $0.provider == providerID.rawValue }
   }
 
   private func cachedSnapshots() -> [CodexUsageSnapshot] {

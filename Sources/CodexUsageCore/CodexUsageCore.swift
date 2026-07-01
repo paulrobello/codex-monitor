@@ -48,6 +48,17 @@ public struct CodexUsageSnapshot: Codable, Equatable, Sendable {
   }
 }
 
+public extension Array where Element == CodexUsageSnapshot {
+  func filteringDisabledProviders(settings: CodexMonitorSettings) -> [CodexUsageSnapshot] {
+    filter { snapshot in
+      guard let provider = CodexUsageProviderID(rawValue: snapshot.provider) else {
+        return false
+      }
+      return settings.enabledProviders.contains(provider)
+    }
+  }
+}
+
 public enum CodexUsageProviderID: String, Codable, CaseIterable, Sendable {
   case openAICodex = "openai-codex"
   case openRouter = "openrouter"
