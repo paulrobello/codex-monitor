@@ -247,6 +247,46 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(details["secondary_progress_percent"] as? Int, 89)
   }
 
+  func testBuildsOpenRouterBeaconCardWithCreditBalanceAndPercent() throws {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let payload = BeaconPayload.fromSnapshots(
+      [
+        CodexUsageSnapshot(
+          provider: CodexUsageProviderID.openRouter.rawValue,
+          fetchedAt: now,
+          fiveHour: CodexUsageWindow(
+            label: "Key limit",
+            remainingPercent: 70,
+            resetAt: nil,
+            detail: "$35 of $50 left"
+          ),
+          weekly: CodexUsageWindow(
+            label: "Credits",
+            remainingPercent: 74.6268656716418,
+            resetAt: nil,
+            detail: "$75 balance • $25 used"
+          )
+        )
+      ],
+      generatedAt: now,
+      deviceID: "beacon-dev"
+    )
+
+    let card = try XCTUnwrap(payload.cards.first)
+    XCTAssertEqual(card.title, "OPENROUTER")
+    XCTAssertEqual(card.kind, .spend)
+    XCTAssertEqual(card.value, 75)
+    XCTAssertEqual(card.unit, "%")
+    XCTAssertEqual(card.primaryMetric, "$75 / 75% CREDITS REMAINING")
+    XCTAssertEqual(card.secondaryMetric, "KEY LIMIT 70%")
+    XCTAssertEqual(card.details?.creditsDetail, "$75 balance • $25 used")
+    XCTAssertEqual(card.details?.keyLimitDetail, "$35 of $50 left")
+    XCTAssertEqual(card.details?.primaryProgressPercent, 75)
+    XCTAssertEqual(card.details?.secondaryProgressPercent, 70)
+    XCTAssertEqual(card.progressPercent, 75)
+    XCTAssertEqual(card.secondaryProgressPercent, 70)
+  }
+
   func testBuildsBeaconCardsWithProviderColorOverride() throws {
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     let payload = BeaconPayload.fromSnapshots(

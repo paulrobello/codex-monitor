@@ -219,12 +219,15 @@ public struct BeaconCard: Codable, Equatable, Sendable {
   ) -> BeaconCard? {
     let fiveHour = snapshot.fiveHour
     let weekly = snapshot.weekly
-    let primaryPercent = clampedPercent(fiveHour?.remainingPercent ?? 0)
-    let secondaryPercent = clampedPercent(weekly?.remainingPercent ?? Double(primaryPercent))
     let providerID = CodexUsageProviderID(rawValue: snapshot.provider)
-    let primaryDetail = resetDetail(for: fiveHour, now: snapshot.fetchedAt)
-    let secondaryDetail = resetDetail(for: weekly, now: snapshot.fetchedAt)
-    let kind: BeaconCardKind = providerID == .openRouter ? .spend : .meter
+    let isOpenRouter = providerID == .openRouter
+    let primaryWindow = isOpenRouter ? weekly ?? fiveHour : fiveHour
+    let secondaryWindow = isOpenRouter ? fiveHour : weekly
+    let primaryPercent = clampedPercent(primaryWindow?.remainingPercent ?? 0)
+    let secondaryPercent = clampedPercent(secondaryWindow?.remainingPercent ?? Double(primaryPercent))
+    let primaryDetail = resetDetail(for: primaryWindow, now: snapshot.fetchedAt)
+    let secondaryDetail = resetDetail(for: secondaryWindow, now: snapshot.fetchedAt)
+    let kind: BeaconCardKind = isOpenRouter ? .spend : .meter
 
     return BeaconCard(
       id: snapshot.provider,
@@ -233,9 +236,13 @@ public struct BeaconCard: Codable, Equatable, Sendable {
       subtitle: providerID?.beaconSubtitle ?? "STATUS",
       value: primaryPercent,
       unit: "%",
-      primaryMetric: primaryMetric(for: fiveHour, providerID: providerID, percent: primaryPercent)
+      primaryMetric: primaryMetric(for: primaryWindow, providerID: providerID, percent: primaryPercent)
         ?? snapshot.displayName,
-      secondaryMetric: secondaryMetric(for: weekly, providerID: providerID, percent: secondaryPercent),
+      secondaryMetric: secondaryMetric(
+        for: secondaryWindow,
+        providerID: providerID,
+        percent: secondaryPercent
+      ),
       status: .healthy,
       kind: kind,
       accentColor: providerColors[snapshot.provider]
@@ -243,14 +250,14 @@ public struct BeaconCard: Codable, Equatable, Sendable {
         ?? BeaconRGB(red: 112, green: 124, blue: 140),
       updatedAt: snapshot.fetchedAt,
       details: BeaconCardDetails(
-        resetAt: fiveHour?.resetAt,
-        weeklyResetAt: weekly?.resetAt,
+        resetAt: primaryWindow?.resetAt,
+        weeklyResetAt: secondaryWindow?.resetAt,
         primaryDetail: primaryDetail,
         secondaryDetail: secondaryDetail,
         primaryProgressPercent: primaryPercent,
         secondaryProgressPercent: secondaryPercent,
-        creditsDetail: providerID == .openRouter ? fiveHour?.detail ?? fiveHour?.valueText : nil,
-        keyLimitDetail: providerID == .openRouter ? weekly?.detail ?? weekly?.valueText : nil
+        creditsDetail: isOpenRouter ? primaryWindow?.detail ?? primaryWindow?.valueText : nil,
+        keyLimitDetail: isOpenRouter ? secondaryWindow?.detail ?? secondaryWindow?.valueText : nil
       ),
       progressPercent: primaryPercent,
       secondaryProgressPercent: secondaryPercent
@@ -290,7 +297,11 @@ public struct BeaconCard: Codable, Equatable, Sendable {
       return nil
     }
     if providerID == .openRouter {
-      return "\(percent)% CREDITS REMAINING"
+      let metric = "\(percent)% CREDITS REMAINING"
+      if let balance = firstCurrencyToken(in: window.detail ?? window.valueText) {
+        return "\(balance) / \(metric)"
+      }
+      return metric
     }
     return "\(normalizedLabel(window.label)) \(percent)%"
   }
@@ -316,6 +327,22 @@ public struct BeaconCard: Codable, Equatable, Sendable {
     default:
       return label.uppercased()
     }
+  }
+
+  private static func firstCurrencyToken(in value: String?) -> String? {
+    guard let value, let start = value.firstIndex(of: "$") else {
+      return nil
+    }
+    var end = value.index(after: start)
+    while end < value.endIndex {
+      let character = value[end]
+      if character.isNumber || character == "." || character == "," {
+        end = value.index(after: end)
+      } else {
+        break
+      }
+    }
+    return end > value.index(after: start) ? String(value[start..<end]) : nil
   }
 
   private static func resetDetail(for window: CodexUsageWindow?, now: Date) -> String? {
