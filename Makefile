@@ -10,6 +10,7 @@ XCODEBUILD_FLAGS := -allowProvisioningUpdates
 APP_NAME := CodexMonitor
 SERVICE_PROCESS := net.pardev.CodexMonitor.Service
 WIDGET_EXTENSION_PROCESS := CodexMonitorWidgetExtension
+WIDGET_BUNDLE_ID := net.pardev.CodexMonitor.Widget
 IOS_APP_NAME := CodexMonitoriOS
 IOS_BUNDLE_ID := net.pardev.CodexMonitor.iOS
 APP_BUNDLE_NAME := $(APP_NAME).app
@@ -48,6 +49,9 @@ checkall: build test lint fmt typecheck
 install: build
 	pkill -x "$(APP_NAME)" >/dev/null 2>&1 || true
 	pkill -x "$(WIDGET_EXTENSION_PROCESS)" >/dev/null 2>&1 || true
+	pluginkit -m -A -D -vv | awk 'index($$0, "$(WIDGET_BUNDLE_ID)(") { matched = 1; next } matched && /^[[:space:]]*Path = / { sub(/^[[:space:]]*Path = /, ""); print; matched = 0 }' | while IFS= read -r stale_widget; do \
+		pluginkit -r "$$stale_widget" >/dev/null 2>&1 || true; \
+	done
 	mkdir -p "$(INSTALL_DIR)"
 	rm -rf "$(INSTALLED_APP_BUNDLE)"
 	ditto "$(APP_BUNDLE)" "$(INSTALLED_APP_BUNDLE)"

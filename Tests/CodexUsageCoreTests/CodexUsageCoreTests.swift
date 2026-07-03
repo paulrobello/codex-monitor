@@ -911,6 +911,9 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(makefile.contains("INSTALLED_SERVICE_LOGIN_ITEM"))
     XCTAssertTrue(makefile.contains("--register-service"))
     XCTAssertTrue(makefile.contains("--unregister-service"))
+    XCTAssertTrue(makefile.contains("pluginkit -m -A -D -vv"))
+    XCTAssertTrue(makefile.contains("CodexMonitorWidgetExtension.appex"))
+    XCTAssertTrue(makefile.contains("pluginkit -r \"$$stale_widget\""))
   }
 
   func testCLITargetDoesNotRequireProvisionedKeychainEntitlement() throws {
