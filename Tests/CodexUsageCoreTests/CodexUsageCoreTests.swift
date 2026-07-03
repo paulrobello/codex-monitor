@@ -1099,12 +1099,73 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(snapshot.weekly?.valueText, "1.0K")
   }
 
+  func testClaudeCodeUsageReadsStatuslineLocalRateLimits() throws {
+    let root = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+      .appendingPathComponent("projects", isDirectory: true)
+    let project = root.appendingPathComponent("-Users-probello-Repos-example", isDirectory: true)
+    let session = project.appendingPathComponent("session.jsonl")
+    let statuslineFile = root.deletingLastPathComponent()
+      .appendingPathComponent("statusline.local.json")
+    try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+    let now = ISO8601DateFormatter().date(from: "2026-06-11T16:00:00Z")!
+    try claudeUsageLine(
+      uuid: "recent",
+      timestamp: "2026-06-11T15:30:00.615Z",
+      input: 100,
+      output: 50,
+      cacheCreation: 25,
+      cacheRead: 825
+    ).write(to: session, atomically: true, encoding: .utf8)
+    try """
+      {
+        "sessions": {
+          "older": {
+            "updated_epoch": 1783043336,
+            "rate_limits": {
+              "five_hour_used_pct": 80,
+              "five_hour_resets_at": 1783060000,
+              "seven_day_used_pct": 90,
+              "seven_day_resets_at": 1783280000
+            }
+          },
+          "newer": {
+            "updated_epoch": 1783043564,
+            "rate_limits": {
+              "five_hour_used_pct": 38,
+              "five_hour_resets_at": 1782933000,
+              "seven_day_used_pct": 37,
+              "seven_day_resets_at": 1783288800
+            }
+          }
+        }
+      }
+      """.write(to: statuslineFile, atomically: true, encoding: .utf8)
+
+    let snapshot = try ClaudeCodeUsageClient(
+      projectsDirectory: root,
+      statuslineFile: statuslineFile
+    ).fetchUsage(now: now)
+
+    XCTAssertEqual(snapshot.fiveHour?.label, "5h limit")
+    XCTAssertEqual(snapshot.fiveHour?.remainingPercent, 62)
+    XCTAssertEqual(snapshot.fiveHour?.resetAt, Date(timeIntervalSince1970: 1_782_933_000))
+    XCTAssertEqual(snapshot.fiveHour?.valueText, "1.0K")
+    XCTAssertEqual(snapshot.weekly?.label, "7d limit")
+    XCTAssertEqual(snapshot.weekly?.remainingPercent, 63)
+    XCTAssertEqual(snapshot.weekly?.resetAt, Date(timeIntervalSince1970: 1_783_288_800))
+    XCTAssertEqual(snapshot.weekly?.valueText, "1.0K")
+  }
+
   func testClaudeCodeMissingProjectsDirectoryReturnsStatusSnapshot() throws {
     let root = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)
       .appendingPathComponent("projects", isDirectory: true)
 
-    let snapshot = try ClaudeCodeUsageClient(projectsDirectory: root)
+    let snapshot = try ClaudeCodeUsageClient(
+      projectsDirectory: root,
+      statuslineFile: root.deletingLastPathComponent().appendingPathComponent("missing.json")
+    )
       .fetchUsage(now: Date(timeIntervalSince1970: 0))
 
     XCTAssertEqual(snapshot.provider, CodexUsageProviderID.claudeCode.rawValue)

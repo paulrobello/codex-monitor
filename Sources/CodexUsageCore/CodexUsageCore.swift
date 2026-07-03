@@ -1021,20 +1021,35 @@ public struct ClaudeCodeUsageTotals: Equatable, Sendable {
   }
 }
 
+private struct ClaudeCodeStatuslineRateLimits: Equatable, Sendable {
+  var fiveHourUsedPercent: Double?
+  var fiveHourResetAt: Date?
+  var sevenDayUsedPercent: Double?
+  var sevenDayResetAt: Date?
+
+  var hasLimits: Bool {
+    fiveHourUsedPercent != nil || fiveHourResetAt != nil || sevenDayUsedPercent != nil
+      || sevenDayResetAt != nil
+  }
+}
+
 public final class ClaudeCodeUsageClient: @unchecked Sendable {
   private let fileManager: FileManager
   private let projectsDirectory: URL
+  private let statuslineFile: URL
   private let maxFiles: Int
   private let tailBytes: UInt64
 
   public init(
     fileManager: FileManager = .default,
     projectsDirectory: URL? = nil,
+    statuslineFile: URL? = nil,
     maxFiles: Int = 12,
     tailBytes: UInt64 = 2_000_000
   ) {
     self.fileManager = fileManager
     self.projectsDirectory = projectsDirectory ?? Self.defaultProjectsDirectory(fileManager: fileManager)
+    self.statuslineFile = statuslineFile ?? Self.defaultStatuslineFile(fileManager: fileManager)
     self.maxFiles = maxFiles
     self.tailBytes = tailBytes
   }
@@ -1054,6 +1069,21 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
     #endif
   }
 
+  public static func defaultStatuslineFile(fileManager: FileManager = .default) -> URL {
+    #if os(iOS)
+      let baseURL =
+        fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        ?? fileManager.temporaryDirectory
+      return baseURL.appendingPathComponent(".claude/statusline.local.json", isDirectory: false)
+    #elseif os(macOS)
+      return Self.realUserHomeDirectory()
+        .appendingPathComponent(".claude/statusline.local.json", isDirectory: false)
+    #else
+      return fileManager.homeDirectoryForCurrentUser
+        .appendingPathComponent(".claude/statusline.local.json", isDirectory: false)
+    #endif
+  }
+
   #if os(macOS)
     private static func realUserHomeDirectory() -> URL {
       if let passwd = getpwuid(getuid()), let homeDirectory = passwd.pointee.pw_dir {
@@ -1064,8 +1094,16 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
   #endif
 
   public func fetchUsage(now: Date = Date()) throws -> CodexUsageSnapshot {
+    let rateLimits = try? statuslineRateLimits()
     let files = try latestSessionFiles()
     if files.isEmpty {
+      if let rateLimits {
+        return statuslineSnapshot(
+          rateLimits: rateLimits,
+          now: now,
+          fallbackDetail: "No Claude Code JSONL sessions were found under \(projectsDirectory.path)."
+        )
+      }
       return statusSnapshot(
         now: now,
         detail: "No Claude Code JSONL sessions were found under \(projectsDirectory.path)."
@@ -1092,6 +1130,13 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
     }
 
     guard sevenDay.assistantTurns > 0 || fiveHour.assistantTurns > 0 else {
+      if let rateLimits {
+        return statuslineSnapshot(
+          rateLimits: rateLimits,
+          now: now,
+          fallbackDetail: "No Claude Code usage records were found in recent JSONL tails."
+        )
+      }
       return statusSnapshot(
         now: now,
         detail: "No Claude Code usage records were found in recent JSONL tails."
@@ -1104,8 +1149,22 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
     return CodexUsageSnapshot(
       provider: CodexUsageProviderID.claudeCode.rawValue,
       fetchedAt: now,
-      fiveHour: window(label: "5h tokens", totals: fiveHour, fallbackDetail: resetDetail),
-      weekly: window(label: "7d tokens", totals: sevenDay, fallbackDetail: resetDetail)
+      fiveHour: window(
+        label: rateLimits?.fiveHourUsedPercent == nil && rateLimits?.fiveHourResetAt == nil
+          ? "5h tokens" : "5h limit",
+        totals: fiveHour,
+        fallbackDetail: resetDetail,
+        usedPercent: rateLimits?.fiveHourUsedPercent,
+        resetAt: rateLimits?.fiveHourResetAt
+      ),
+      weekly: window(
+        label: rateLimits?.sevenDayUsedPercent == nil && rateLimits?.sevenDayResetAt == nil
+          ? "7d tokens" : "7d limit",
+        totals: sevenDay,
+        fallbackDetail: resetDetail,
+        usedPercent: rateLimits?.sevenDayUsedPercent,
+        resetAt: rateLimits?.sevenDayResetAt
+      )
     )
   }
 
@@ -1183,6 +1242,47 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
     )
   }
 
+  private func statuslineSnapshot(
+    rateLimits: ClaudeCodeStatuslineRateLimits,
+    now: Date,
+    fallbackDetail: String
+  ) -> CodexUsageSnapshot {
+    CodexUsageSnapshot(
+      provider: CodexUsageProviderID.claudeCode.rawValue,
+      fetchedAt: now,
+      fiveHour: statuslineWindow(
+        label: "5h limit",
+        usedPercent: rateLimits.fiveHourUsedPercent,
+        resetAt: rateLimits.fiveHourResetAt,
+        fallbackDetail: fallbackDetail
+      ),
+      weekly: statuslineWindow(
+        label: "7d limit",
+        usedPercent: rateLimits.sevenDayUsedPercent,
+        resetAt: rateLimits.sevenDayResetAt,
+        fallbackDetail: fallbackDetail
+      )
+    )
+  }
+
+  private func statuslineWindow(
+    label: String,
+    usedPercent: Double?,
+    resetAt: Date?,
+    fallbackDetail: String
+  ) -> CodexUsageWindow? {
+    guard usedPercent != nil || resetAt != nil else {
+      return nil
+    }
+    return CodexUsageWindow(
+      label: label,
+      remainingPercent: remainingPercent(fromUsedPercent: usedPercent) ?? 100,
+      resetAt: resetAt,
+      detail: fallbackDetail,
+      valueText: usedPercent.map { "\(Int($0.rounded()))% used" } ?? "Rate limit"
+    )
+  }
+
   private func usageRecords(in file: URL) throws -> [ClaudeCodeUsageTotals] {
     let text = try tailText(from: file)
     var records: [ClaudeCodeUsageTotals] = []
@@ -1244,6 +1344,16 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
   private func window(label: String, totals: ClaudeCodeUsageTotals, fallbackDetail: String?)
     -> CodexUsageWindow?
   {
+    window(label: label, totals: totals, fallbackDetail: fallbackDetail, usedPercent: nil, resetAt: nil)
+  }
+
+  private func window(
+    label: String,
+    totals: ClaudeCodeUsageTotals,
+    fallbackDetail: String?,
+    usedPercent: Double?,
+    resetAt: Date?
+  ) -> CodexUsageWindow? {
     guard totals.assistantTurns > 0 else {
       return nil
     }
@@ -1251,11 +1361,61 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
       "\(totals.assistantTurns) responses • \(formatTokens(totals.inputTokens)) in • \(formatTokens(totals.outputTokens)) out • \(formatTokens(totals.cacheCreationTokens + totals.cacheReadTokens)) cache"
     return CodexUsageWindow(
       label: label,
-      remainingPercent: 100,
-      resetAt: totals.resetAt,
+      remainingPercent: remainingPercent(fromUsedPercent: usedPercent) ?? 100,
+      resetAt: resetAt ?? totals.resetAt,
       detail: [detail, fallbackDetail].compactMap { $0 }.joined(separator: " • "),
       valueText: formatTokens(totals.totalTokens)
     )
+  }
+
+  private func statuslineRateLimits() throws -> ClaudeCodeStatuslineRateLimits? {
+    var isDirectory: ObjCBool = false
+    guard fileManager.fileExists(atPath: statuslineFile.path, isDirectory: &isDirectory),
+      !isDirectory.boolValue
+    else {
+      return nil
+    }
+    let data = try Data(contentsOf: statuslineFile)
+    guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+      return nil
+    }
+    if let session = latestStatuslineSession(in: root) {
+      return statuslineRateLimits(in: session)
+    }
+    return statuslineRateLimits(in: root)
+  }
+
+  private func latestStatuslineSession(in root: [String: Any]) -> [String: Any]? {
+    guard let sessions = root["sessions"] as? [String: Any] else {
+      return nil
+    }
+    return sessions.values
+      .compactMap { $0 as? [String: Any] }
+      .filter { statuslineRateLimits(in: $0) != nil }
+      .sorted { statuslineUpdatedAt($0) > statuslineUpdatedAt($1) }
+      .first
+  }
+
+  private func statuslineRateLimits(in record: [String: Any]) -> ClaudeCodeStatuslineRateLimits? {
+    let rateLimits = record["rate_limits"] as? [String: Any] ?? record["rateLimits"] as? [String: Any]
+    guard let rateLimits else {
+      return nil
+    }
+    let parsed = ClaudeCodeStatuslineRateLimits(
+      fiveHourUsedPercent: double(rateLimits["five_hour_used_pct"]),
+      fiveHourResetAt: timestamp(rateLimits["five_hour_resets_at"]),
+      sevenDayUsedPercent: double(rateLimits["seven_day_used_pct"]),
+      sevenDayResetAt: timestamp(rateLimits["seven_day_resets_at"])
+    )
+    return parsed.hasLimits ? parsed : nil
+  }
+
+  private func statuslineUpdatedAt(_ record: [String: Any]) -> Date {
+    timestamp(record["updated_epoch"]) ?? timestamp(record["updated_at"]) ?? .distantPast
+  }
+
+  private func remainingPercent(fromUsedPercent usedPercent: Double?) -> Double? {
+    usedPercent.map { min(100, max(0, 100 - $0)) }
   }
 
   private func resetDate(in root: [String: Any]) -> Date? {
@@ -1325,6 +1485,16 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
       return Int(string.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
     }
     return 0
+  }
+
+  private func double(_ value: Any?) -> Double? {
+    if let number = value as? NSNumber {
+      return number.doubleValue
+    }
+    if let string = value as? String {
+      return Double(string.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+    return nil
   }
 
   private func formatTokens(_ value: Int) -> String {
