@@ -1278,7 +1278,7 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
       label: label,
       remainingPercent: remainingPercent(fromUsedPercent: usedPercent) ?? 100,
       resetAt: resetAt,
-      detail: fallbackDetail,
+      detail: resetDetail(resetAt: resetAt) ?? fallbackDetail,
       valueText: usedPercent.map { "\(Int($0.rounded()))% used" } ?? "Rate limit"
     )
   }
@@ -1359,13 +1359,19 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
     }
     let detail =
       "\(totals.assistantTurns) responses • \(formatTokens(totals.inputTokens)) in • \(formatTokens(totals.outputTokens)) out • \(formatTokens(totals.cacheCreationTokens + totals.cacheReadTokens)) cache"
+    let effectiveResetAt = resetAt ?? totals.resetAt
+    let secondaryDetail = resetDetail(resetAt: effectiveResetAt) ?? fallbackDetail
     return CodexUsageWindow(
       label: label,
       remainingPercent: remainingPercent(fromUsedPercent: usedPercent) ?? 100,
-      resetAt: resetAt ?? totals.resetAt,
-      detail: [detail, fallbackDetail].compactMap { $0 }.joined(separator: " • "),
+      resetAt: effectiveResetAt,
+      detail: [detail, secondaryDetail].compactMap { $0 }.joined(separator: " • "),
       valueText: formatTokens(totals.totalTokens)
     )
+  }
+
+  private func resetDetail(resetAt: Date?) -> String? {
+    resetAt.map { CodexResetText.string(resetAt: $0) }
   }
 
   private func statuslineRateLimits() throws -> ClaudeCodeStatuslineRateLimits? {
