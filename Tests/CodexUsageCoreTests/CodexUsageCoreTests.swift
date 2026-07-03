@@ -793,6 +793,25 @@ final class CodexUsageCoreTests: XCTestCase {
     }
   }
 
+  func testAppUsageWindowsShowProgressBarsForLimitRowsWithValueText() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let appSources = [
+      repositoryRoot.appendingPathComponent("Sources/CodexMonitorApp/CodexMonitorApp.swift"),
+      repositoryRoot.appendingPathComponent("Sources/CodexMonitoriOS/CodexMonitoriOSApp.swift"),
+    ]
+
+    for appSource in appSources {
+      let source = try String(contentsOf: appSource, encoding: .utf8)
+      XCTAssertTrue(source.contains("private var showsProgressBar: Bool"))
+      XCTAssertTrue(source.contains("window.valueText == nil || window.label.hasSuffix(\"limit\")"))
+      XCTAssertTrue(source.contains("if showsProgressBar {"))
+    }
+  }
+
   func testCLIRefreshUsesCollectionServiceAndReadsCache() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let repositoryRoot = testFile

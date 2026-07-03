@@ -529,7 +529,7 @@ struct iOSUsageWindowView: View {
           .font(.system(.title3, design: .rounded).weight(.semibold))
           .foregroundStyle(tint)
       }
-      if window.valueText == nil {
+      if showsProgressBar {
         UsageProgressBar(value: window.remainingPercent, tint: tint)
       }
       Text(resetText)
@@ -546,6 +546,10 @@ struct iOSUsageWindowView: View {
       return .orange
     }
     return .green
+  }
+
+  private var showsProgressBar: Bool {
+    window.valueText == nil || window.label.hasSuffix("limit")
   }
 
   private var resetText: String {

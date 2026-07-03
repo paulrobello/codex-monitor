@@ -823,7 +823,7 @@ struct UsageWindowView: View {
           .font(.system(.title3, design: .rounded).weight(.semibold))
           .foregroundStyle(tint)
       }
-      if window.valueText == nil {
+      if showsProgressBar {
         UsageProgressBar(value: window.remainingPercent, tint: tint)
       }
       Text(resetText)
@@ -840,6 +840,10 @@ struct UsageWindowView: View {
       return "Reset time unavailable"
     }
     return CodexResetText.string(resetAt: resetAt)
+  }
+
+  private var showsProgressBar: Bool {
+    window.valueText == nil || window.label.hasSuffix("limit")
   }
 
   private var displayLabel: String {
