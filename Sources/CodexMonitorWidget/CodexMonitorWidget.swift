@@ -13,14 +13,23 @@ struct CodexUsageEntry: TimelineEntry {
 enum CodexWidgetProviderChoice: String, AppEnum {
   case openAICodex
   case openRouter
+  #if os(macOS)
   case claudeCode
+  #endif
 
   static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Provider")
+  #if os(macOS)
   static let caseDisplayRepresentations: [CodexWidgetProviderChoice: DisplayRepresentation] = [
     .openAICodex: "Codex",
     .openRouter: "OpenRouter",
     .claudeCode: "Claude Code",
   ]
+  #else
+  static let caseDisplayRepresentations: [CodexWidgetProviderChoice: DisplayRepresentation] = [
+    .openAICodex: "Codex",
+    .openRouter: "OpenRouter",
+  ]
+  #endif
 
   var providerID: CodexUsageProviderID {
     switch self {
@@ -28,8 +37,10 @@ enum CodexWidgetProviderChoice: String, AppEnum {
       return .openAICodex
     case .openRouter:
       return .openRouter
+    #if os(macOS)
     case .claudeCode:
       return .claudeCode
+    #endif
     }
   }
 }

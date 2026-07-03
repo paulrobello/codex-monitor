@@ -676,6 +676,32 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("filteringDisabledProviders(settings: settings)"))
   }
 
+  func testIOSWidgetProviderPickerExcludesClaudeCode() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let widgetSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent(
+        "Sources/CodexMonitorWidget/CodexMonitorWidget.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(widgetSource.contains("#if os(macOS)\n  case claudeCode\n  #endif"))
+    XCTAssertTrue(
+      widgetSource.contains(
+        "#if os(macOS)\n  static let caseDisplayRepresentations: [CodexWidgetProviderChoice: DisplayRepresentation] = ["
+      ))
+    XCTAssertTrue(widgetSource.contains(".claudeCode: \"Claude Code\""))
+    XCTAssertTrue(
+      widgetSource.contains(
+        "#else\n  static let caseDisplayRepresentations: [CodexWidgetProviderChoice: DisplayRepresentation] = ["
+      ))
+    XCTAssertTrue(
+      widgetSource.contains("#if os(macOS)\n    case .claudeCode:\n      return .claudeCode\n    #endif"))
+  }
+
   func testMacAppUsesCollectionServiceForRefreshes() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let repositoryRoot = testFile
