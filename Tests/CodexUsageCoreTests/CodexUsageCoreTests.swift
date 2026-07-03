@@ -1099,6 +1099,63 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(snapshot.weekly?.valueText, "1.0K")
   }
 
+  func testClaudeCodeSessionSelectionUsesJsonlFileModificationDates() throws {
+    let root = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+      .appendingPathComponent("projects", isDirectory: true)
+    let staleProject = root.appendingPathComponent("-Users-probello-Repos-stale", isDirectory: true)
+    let activeProject = root.appendingPathComponent("-Users-probello-Repos-active", isDirectory: true)
+    try FileManager.default.createDirectory(at: staleProject, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: activeProject, withIntermediateDirectories: true)
+    let now = ISO8601DateFormatter().date(from: "2026-06-11T16:00:00Z")!
+    let oldFileDate = ISO8601DateFormatter().date(from: "2026-06-01T12:00:00Z")!
+    let activeFileDate = ISO8601DateFormatter().date(from: "2026-06-11T15:45:00Z")!
+
+    for index in 0..<3 {
+      let session = staleProject.appendingPathComponent("stale-\(index).jsonl")
+      try claudeUsageLine(
+        uuid: "stale-\(index)",
+        timestamp: "2026-06-01T12:00:00.000Z",
+        input: 100,
+        output: 100,
+        cacheCreation: 0,
+        cacheRead: 800
+      ).write(to: session, atomically: true, encoding: .utf8)
+      try FileManager.default.setAttributes([.modificationDate: oldFileDate], ofItemAtPath: session.path)
+    }
+
+    let activeSession = activeProject.appendingPathComponent("active.jsonl")
+    try claudeUsageLine(
+      uuid: "active",
+      timestamp: "2026-06-11T15:30:00.615Z",
+      input: 100,
+      output: 50,
+      cacheCreation: 25,
+      cacheRead: 825
+    ).write(to: activeSession, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes(
+      [.modificationDate: activeFileDate],
+      ofItemAtPath: activeSession.path
+    )
+    try FileManager.default.setAttributes(
+      [.modificationDate: ISO8601DateFormatter().date(from: "2026-06-11T15:55:00Z")!],
+      ofItemAtPath: staleProject.path
+    )
+    try FileManager.default.setAttributes(
+      [.modificationDate: ISO8601DateFormatter().date(from: "2026-06-10T15:55:00Z")!],
+      ofItemAtPath: activeProject.path
+    )
+
+    let snapshot = try ClaudeCodeUsageClient(
+      projectsDirectory: root,
+      statuslineFile: root.deletingLastPathComponent().appendingPathComponent("missing-statusline.json"),
+      maxFiles: 3
+    ).fetchUsage(now: now)
+
+    XCTAssertEqual(snapshot.fiveHour?.valueText, "1.0K")
+    XCTAssertEqual(snapshot.weekly?.valueText, "1.0K")
+  }
+
   func testClaudeCodeIgnoresTranscriptResetMetadataForNonAnthropicModels() throws {
     let root = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)

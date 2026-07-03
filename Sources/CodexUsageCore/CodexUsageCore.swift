@@ -1186,18 +1186,10 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
     } catch {
       return []
     }
-    let projectDirectories = projectDirectoryURLs
+    let files = projectDirectoryURLs
       .filter { isDirectory($0) }
+      .flatMap { jsonlFiles(in: $0) }
       .sorted { modificationDate($0) > modificationDate($1) }
-
-    var files: [URL] = []
-    for directory in projectDirectories {
-      let sessionFiles = jsonlFiles(in: directory)
-      files.append(contentsOf: sessionFiles.prefix(max(1, maxFiles - files.count)))
-      if files.count >= maxFiles {
-        break
-      }
-    }
     return Array(files.prefix(maxFiles))
   }
 
