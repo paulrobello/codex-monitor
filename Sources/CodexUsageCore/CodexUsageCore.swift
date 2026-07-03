@@ -1269,7 +1269,7 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
     label: String,
     usedPercent: Double?,
     resetAt: Date?,
-    fallbackDetail: String
+    fallbackDetail: String?
   ) -> CodexUsageWindow? {
     guard usedPercent != nil || resetAt != nil else {
       return nil
@@ -1355,7 +1355,12 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
     resetAt: Date?
   ) -> CodexUsageWindow? {
     guard totals.assistantTurns > 0 else {
-      return nil
+      return statuslineWindow(
+        label: label,
+        usedPercent: usedPercent,
+        resetAt: resetAt,
+        fallbackDetail: fallbackDetail
+      )
     }
     let detail =
       "\(totals.assistantTurns) responses • \(formatTokens(totals.inputTokens)) in • \(formatTokens(totals.outputTokens)) out • \(formatTokens(totals.cacheCreationTokens + totals.cacheReadTokens)) cache"
