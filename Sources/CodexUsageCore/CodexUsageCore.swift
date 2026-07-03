@@ -1312,6 +1312,7 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
     else {
       return nil
     }
+    let model = message["model"] as? String ?? root["model"] as? String
 
     let totals = ClaudeCodeUsageTotals(
       inputTokens: int(usage["input_tokens"]),
@@ -1320,7 +1321,7 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
       cacheReadTokens: int(usage["cache_read_input_tokens"]),
       assistantTurns: 1,
       latestAt: timestamp(root["timestamp"]),
-      resetAt: resetDate(in: root)
+      resetAt: isAnthropicTranscriptModel(model) ? resetDate(in: root) : nil
     )
     return totals.totalTokens > 0 ? totals : nil
   }
@@ -1377,6 +1378,15 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
 
   private func resetDetail(resetAt: Date?) -> String? {
     resetAt.map { CodexResetText.string(resetAt: $0) }
+  }
+
+  private func isAnthropicTranscriptModel(_ model: String?) -> Bool {
+    guard let model = model?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+      !model.isEmpty
+    else {
+      return false
+    }
+    return model.hasPrefix("claude-") || model.contains("/claude-") || model.contains("anthropic")
   }
 
   private func statuslineRateLimits() throws -> ClaudeCodeStatuslineRateLimits? {

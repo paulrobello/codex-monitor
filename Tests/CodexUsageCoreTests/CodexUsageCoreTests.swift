@@ -1099,6 +1099,39 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(snapshot.weekly?.valueText, "1.0K")
   }
 
+  func testClaudeCodeIgnoresTranscriptResetMetadataForNonAnthropicModels() throws {
+    let root = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+      .appendingPathComponent("projects", isDirectory: true)
+    let project = root.appendingPathComponent("-Users-probello-Repos-example", isDirectory: true)
+    let session = project.appendingPathComponent("session.jsonl")
+    try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+    let now = ISO8601DateFormatter().date(from: "2026-06-11T16:00:00Z")!
+    try claudeUsageLine(
+      uuid: "glm",
+      timestamp: "2026-06-11T15:30:00.615Z",
+      input: 400,
+      output: 100,
+      cacheCreation: 0,
+      cacheRead: 500,
+      model: "zai/glm-4.5",
+      error: #""error":{"rateLimits":{"resetAt":1782933000}}"#
+    ).write(to: session, atomically: true, encoding: .utf8)
+
+    let snapshot = try ClaudeCodeUsageClient(
+      projectsDirectory: root,
+      statuslineFile: root.deletingLastPathComponent().appendingPathComponent("missing-statusline.json")
+    ).fetchUsage(now: now)
+
+    XCTAssertEqual(snapshot.fiveHour?.valueText, "1.0K")
+    XCTAssertNil(snapshot.fiveHour?.resetAt)
+    XCTAssertEqual(
+      snapshot.fiveHour?.detail?.contains("Reset metadata was not present in recent JSONL tails"),
+      true
+    )
+    XCTAssertNil(snapshot.weekly?.resetAt)
+  }
+
   func testClaudeCodeUsageReadsStatuslineLocalRateLimits() throws {
     let root = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)
@@ -1279,10 +1312,13 @@ final class CodexUsageCoreTests: XCTestCase {
     input: Int,
     output: Int,
     cacheCreation: Int,
-    cacheRead: Int
+    cacheRead: Int,
+    model: String = "claude-opus-4-8",
+    error: String? = nil
   ) -> String {
-    """
-    {"type":"assistant","uuid":"\(uuid)","timestamp":"\(timestamp)","message":{"role":"assistant","model":"claude-opus-4-8","usage":{"input_tokens":\(input),"output_tokens":\(output),"cache_creation_input_tokens":\(cacheCreation),"cache_read_input_tokens":\(cacheRead),"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0}}}}
+    let errorFragment = error.map { ",\($0)" } ?? ""
+    return """
+    {"type":"assistant","uuid":"\(uuid)","timestamp":"\(timestamp)","message":{"role":"assistant","model":"\(model)","usage":{"input_tokens":\(input),"output_tokens":\(output),"cache_creation_input_tokens":\(cacheCreation),"cache_read_input_tokens":\(cacheRead),"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0}}}\(errorFragment)}
     """
   }
 
