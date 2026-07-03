@@ -785,6 +785,9 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains(".font(.system(size: 10, weight: .semibold))"))
     XCTAssertTrue(widgetSource.contains(".font(.system(size: 11, weight: .semibold, design: .rounded))"))
     XCTAssertTrue(widgetSource.contains(".frame(height: 5)"))
+    XCTAssertTrue(widgetSource.contains("private var showsProgressBar: Bool"))
+    XCTAssertTrue(widgetSource.contains("window.valueText == nil || window.label.hasSuffix(\"limit\")"))
+    XCTAssertTrue(widgetSource.contains("if showsProgressBar {"))
     XCTAssertFalse(widgetSource.contains("ProgressView(value: window.remainingPercent, total: 100)"))
 
     for appSource in appSources {

@@ -226,7 +226,7 @@ struct WidgetUsageRow: View {
         Spacer()
         remainingLabel
       }
-      if window.valueText == nil {
+      if showsProgressBar {
         UsageProgressBar(value: window.remainingPercent, tint: tint)
       }
       Text(resetText)
@@ -246,6 +246,10 @@ struct WidgetUsageRow: View {
       return .orange
     }
     return .green
+  }
+
+  private var showsProgressBar: Bool {
+    window.valueText == nil || window.label.hasSuffix("limit")
   }
 
   private var resetText: String {
