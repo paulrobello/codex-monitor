@@ -922,6 +922,28 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(project.contains("CodexMonitorService.app was not built"))
   }
 
+  func testServiceLoginItemRefreshesUsageAndReloadsWidgets() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let serviceSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent(
+        "Sources/CodexMonitorService/CodexMonitorService.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(serviceSource.contains("import WidgetKit"))
+    XCTAssertTrue(serviceSource.contains("let refreshTask = Task {"))
+    XCTAssertTrue(serviceSource.contains("await runRefreshLoop(service: service, settingsStore: settingsStore)"))
+    XCTAssertTrue(serviceSource.contains("defer { refreshTask.cancel() }"))
+    XCTAssertTrue(serviceSource.contains("private static func runRefreshLoop("))
+    XCTAssertTrue(serviceSource.contains("_ = try await service.refreshNow()"))
+    XCTAssertTrue(serviceSource.contains("WidgetCenter.shared.reloadAllTimelines()"))
+    XCTAssertTrue(serviceSource.contains("settingsStore.load().refreshIntervalSeconds"))
+  }
+
   func testMacAppExposesServiceRegistrationCommandLineMode() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let repositoryRoot = testFile
