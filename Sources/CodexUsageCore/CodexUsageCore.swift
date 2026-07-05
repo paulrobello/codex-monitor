@@ -1034,6 +1034,9 @@ private struct ClaudeCodeStatuslineRateLimits: Equatable, Sendable {
 }
 
 public final class ClaudeCodeUsageClient: @unchecked Sendable {
+  // Claude Code can report 78% five-hour usage when the active window is exhausted.
+  private static let fiveHourExhaustedUsedPercent = 78.0
+
   private let fileManager: FileManager
   private let projectsDirectory: URL
   private let statuslineFile: URL
@@ -1268,7 +1271,7 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
     }
     return CodexUsageWindow(
       label: label,
-      remainingPercent: remainingPercent(fromUsedPercent: usedPercent) ?? 100,
+      remainingPercent: remainingPercent(for: label, fromUsedPercent: usedPercent) ?? 100,
       resetAt: resetAt,
       detail: resetDetail(resetAt: resetAt) ?? fallbackDetail,
       valueText: usedPercent == nil ? "Rate limit" : nil
@@ -1361,7 +1364,7 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
     let secondaryDetail = resetDetail(resetAt: effectiveResetAt) ?? fallbackDetail
     return CodexUsageWindow(
       label: label,
-      remainingPercent: remainingPercent(fromUsedPercent: usedPercent) ?? 100,
+      remainingPercent: remainingPercent(for: label, fromUsedPercent: usedPercent) ?? 100,
       resetAt: effectiveResetAt,
       detail: [detail, secondaryDetail].compactMap { $0 }.joined(separator: " • "),
       valueText: usedPercent == nil ? formatTokens(totals.totalTokens) : nil
@@ -1427,8 +1430,14 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
     timestamp(record["updated_epoch"]) ?? timestamp(record["updated_at"]) ?? .distantPast
   }
 
-  private func remainingPercent(fromUsedPercent usedPercent: Double?) -> Double? {
-    usedPercent.map { min(100, max(0, 100 - $0)) }
+  private func remainingPercent(for label: String, fromUsedPercent usedPercent: Double?) -> Double? {
+    guard let usedPercent else {
+      return nil
+    }
+    if label == "5h limit", usedPercent >= Self.fiveHourExhaustedUsedPercent {
+      return 0
+    }
+    return min(100, max(0, 100 - usedPercent))
   }
 
   private func resetDate(in root: [String: Any]) -> Date? {
