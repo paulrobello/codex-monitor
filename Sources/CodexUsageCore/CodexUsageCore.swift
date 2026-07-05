@@ -1271,7 +1271,7 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
       remainingPercent: remainingPercent(fromUsedPercent: usedPercent) ?? 100,
       resetAt: resetAt,
       detail: resetDetail(resetAt: resetAt) ?? fallbackDetail,
-      valueText: usedPercent.map { "\(Int($0.rounded()))% used" } ?? "Rate limit"
+      valueText: usedPercent == nil ? "Rate limit" : nil
     )
   }
 
@@ -1364,7 +1364,7 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
       remainingPercent: remainingPercent(fromUsedPercent: usedPercent) ?? 100,
       resetAt: effectiveResetAt,
       detail: [detail, secondaryDetail].compactMap { $0 }.joined(separator: " • "),
-      valueText: formatTokens(totals.totalTokens)
+      valueText: usedPercent == nil ? formatTokens(totals.totalTokens) : nil
     )
   }
 

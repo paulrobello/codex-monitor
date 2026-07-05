@@ -1137,7 +1137,10 @@ final class CodexUsageCoreTests: XCTestCase {
       ),
     ].joined(separator: "\n").write(to: session, atomically: true, encoding: .utf8)
 
-    let snapshot = try ClaudeCodeUsageClient(projectsDirectory: root).fetchUsage(now: now)
+    let snapshot = try ClaudeCodeUsageClient(
+      projectsDirectory: root,
+      statuslineFile: root.deletingLastPathComponent().appendingPathComponent("missing-statusline.json")
+    ).fetchUsage(now: now)
 
     XCTAssertEqual(snapshot.provider, CodexUsageProviderID.claudeCode.rawValue)
     XCTAssertEqual(snapshot.fiveHour?.valueText, "1.0K")
@@ -1165,7 +1168,10 @@ final class CodexUsageCoreTests: XCTestCase {
       cacheRead: 500
     ).write(to: session, atomically: true, encoding: .utf8)
 
-    let snapshot = try ClaudeCodeUsageClient(projectsDirectory: root).fetchUsage(now: now)
+    let snapshot = try ClaudeCodeUsageClient(
+      projectsDirectory: root,
+      statuslineFile: root.deletingLastPathComponent().appendingPathComponent("missing-statusline.json")
+    ).fetchUsage(now: now)
 
     XCTAssertEqual(snapshot.provider, CodexUsageProviderID.claudeCode.rawValue)
     XCTAssertEqual(snapshot.fiveHour?.valueText, "1.0K")
@@ -1313,7 +1319,7 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(snapshot.fiveHour?.label, "5h limit")
     XCTAssertEqual(snapshot.fiveHour?.remainingPercent, 62)
     XCTAssertEqual(snapshot.fiveHour?.resetAt, Date(timeIntervalSince1970: 1_782_933_000))
-    XCTAssertEqual(snapshot.fiveHour?.valueText, "1.0K")
+    XCTAssertNil(snapshot.fiveHour?.valueText)
     XCTAssertEqual(snapshot.fiveHour?.detail?.contains("Resets"), true)
     XCTAssertEqual(
       snapshot.fiveHour?.detail?.contains("Reset metadata was not present in recent JSONL tails"),
@@ -1322,7 +1328,7 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(snapshot.weekly?.label, "7d limit")
     XCTAssertEqual(snapshot.weekly?.remainingPercent, 63)
     XCTAssertEqual(snapshot.weekly?.resetAt, Date(timeIntervalSince1970: 1_783_288_800))
-    XCTAssertEqual(snapshot.weekly?.valueText, "1.0K")
+    XCTAssertNil(snapshot.weekly?.valueText)
     XCTAssertEqual(snapshot.weekly?.detail?.contains("Resets"), true)
     XCTAssertEqual(
       snapshot.weekly?.detail?.contains("Reset metadata was not present in recent JSONL tails"),
@@ -1372,10 +1378,10 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(snapshot.fiveHour?.label, "5h limit")
     XCTAssertEqual(snapshot.fiveHour?.remainingPercent, 62)
     XCTAssertEqual(snapshot.fiveHour?.resetAt, Date(timeIntervalSince1970: 1_782_933_000))
-    XCTAssertEqual(snapshot.fiveHour?.valueText, "38% used")
+    XCTAssertNil(snapshot.fiveHour?.valueText)
     XCTAssertEqual(snapshot.fiveHour?.detail?.contains("Resets"), true)
     XCTAssertEqual(snapshot.weekly?.label, "7d limit")
-    XCTAssertEqual(snapshot.weekly?.valueText, "1.0K")
+    XCTAssertNil(snapshot.weekly?.valueText)
   }
 
   func testClaudeCodeMissingProjectsDirectoryReturnsStatusSnapshot() throws {
