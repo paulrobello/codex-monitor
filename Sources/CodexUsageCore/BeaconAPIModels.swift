@@ -113,6 +113,7 @@ public struct BeaconCard: Codable, Equatable, Sendable {
   public var provider: String
   public var title: String
   public var subtitle: String?
+  public var label: String?
   public var value: Int?
   public var unit: String?
   public var primaryMetric: String
@@ -130,6 +131,7 @@ public struct BeaconCard: Codable, Equatable, Sendable {
     provider: String,
     title: String,
     subtitle: String?,
+    label: String? = nil,
     value: Int?,
     unit: String?,
     primaryMetric: String,
@@ -146,6 +148,7 @@ public struct BeaconCard: Codable, Equatable, Sendable {
     self.provider = provider
     self.title = title
     self.subtitle = subtitle
+    self.label = label
     self.value = value
     self.unit = unit
     self.primaryMetric = primaryMetric
@@ -164,6 +167,7 @@ public struct BeaconCard: Codable, Equatable, Sendable {
     case provider
     case title
     case subtitle
+    case label
     case type
     case value
     case unit
@@ -181,6 +185,7 @@ public struct BeaconCard: Codable, Equatable, Sendable {
     try container.encode(provider, forKey: .provider)
     try container.encode(title, forKey: .title)
     try container.encodeIfPresent(subtitle, forKey: .subtitle)
+    try container.encodeIfPresent(label, forKey: .label)
     try container.encode(kind.beaconType, forKey: .type)
     try container.encodeIfPresent(value, forKey: .value)
     try container.encodeIfPresent(unit, forKey: .unit)
@@ -198,6 +203,7 @@ public struct BeaconCard: Codable, Equatable, Sendable {
     provider = try container.decode(String.self, forKey: .provider)
     title = try container.decode(String.self, forKey: .title)
     subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
+    label = try container.decodeIfPresent(String.self, forKey: .label)
     value = try container.decodeIfPresent(Int.self, forKey: .value)
     unit = try container.decodeIfPresent(String.self, forKey: .unit)
     primaryMetric = try container.decodeIfPresent(String.self, forKey: .primaryMetric) ?? ""
@@ -228,12 +234,14 @@ public struct BeaconCard: Codable, Equatable, Sendable {
     let primaryDetail = resetDetail(for: primaryWindow, now: snapshot.fetchedAt)
     let secondaryDetail = resetDetail(for: secondaryWindow, now: snapshot.fetchedAt)
     let kind: BeaconCardKind = isOpenRouter ? .spend : .meter
+    let accountLabel = nonEmpty(snapshot.accountLabel)
 
     return BeaconCard(
       id: snapshot.instanceID,
       provider: snapshot.provider,
       title: providerID?.beaconTitle ?? snapshot.displayName.uppercased(),
-      subtitle: providerID?.beaconSubtitle ?? "STATUS",
+      subtitle: accountLabel ?? providerID?.beaconSubtitle ?? "STATUS",
+      label: accountLabel,
       value: primaryPercent,
       unit: "%",
       primaryMetric: primaryMetric(for: primaryWindow, providerID: providerID, percent: primaryPercent)
@@ -270,6 +278,7 @@ public struct BeaconCard: Codable, Equatable, Sendable {
       provider: "system",
       title: "DATA UNAVAILABLE",
       subtitle: "WAITING FOR CARDS",
+      label: nil,
       value: nil,
       unit: nil,
       primaryMetric: "NO CACHE",
@@ -286,6 +295,15 @@ public struct BeaconCard: Codable, Equatable, Sendable {
 
   private static func clampedPercent(_ value: Double) -> Int {
     max(0, min(100, Int(value.rounded())))
+  }
+
+  private static func nonEmpty(_ value: String?) -> String? {
+    guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+      !trimmed.isEmpty
+    else {
+      return nil
+    }
+    return trimmed
   }
 
   private static func primaryMetric(

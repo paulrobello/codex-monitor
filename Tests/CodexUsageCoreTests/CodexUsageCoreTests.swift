@@ -265,7 +265,9 @@ final class CodexUsageCoreTests: XCTestCase {
             remainingPercent: 74.6268656716418,
             resetAt: nil,
             detail: "$75 balance • $25 used"
-          )
+          ),
+          accountID: "work-key",
+          accountLabel: "Work"
         )
       ],
       generatedAt: now,
@@ -273,7 +275,10 @@ final class CodexUsageCoreTests: XCTestCase {
     )
 
     let card = try XCTUnwrap(payload.cards.first)
+    XCTAssertEqual(card.id, "openrouter:work-key")
     XCTAssertEqual(card.title, "OPENROUTER")
+    XCTAssertEqual(card.subtitle, "Work")
+    XCTAssertEqual(card.label, "Work")
     XCTAssertEqual(card.kind, .spend)
     XCTAssertEqual(card.value, 75)
     XCTAssertEqual(card.unit, "%")
@@ -285,6 +290,12 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(card.details?.secondaryProgressPercent, 70)
     XCTAssertEqual(card.progressPercent, 75)
     XCTAssertEqual(card.secondaryProgressPercent, 70)
+
+    let encoded = try Self.jsonObject(from: JSONEncoder.codexMonitor.encode(payload))
+    let encodedCards = try XCTUnwrap(encoded["cards"] as? [[String: Any]])
+    let encodedCard = try XCTUnwrap(encodedCards.first)
+    XCTAssertEqual(encodedCard["label"] as? String, "Work")
+    XCTAssertEqual(encodedCard["subtitle"] as? String, "Work")
   }
 
   func testBuildsBeaconCardsWithProviderColorOverride() throws {
