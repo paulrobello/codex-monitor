@@ -44,7 +44,7 @@ struct CodexMonitorApp: App {
 
     MenuBarExtra("Codex", systemImage: store.menuBarSymbolName) {
       if !store.displayedSnapshots.isEmpty {
-        ForEach(store.displayedSnapshots, id: \.provider) { snapshot in
+        ForEach(store.displayedSnapshots, id: \.instanceID) { snapshot in
           UsageSummaryView(snapshot: snapshot, compact: true, showProviderName: true)
         }
         Divider()
@@ -157,6 +157,7 @@ final class UsageStore: ObservableObject {
   @Published var isRefreshing = false
   @Published private(set) var isCodexSignedIn = false
   @Published private(set) var hasOpenRouterAPIKey = false
+  @Published private(set) var openRouterAPIKeys: [OpenRouterAPIKeyDescriptor] = []
   @Published var errorMessage: String?
   @Published private(set) var settings: CodexMonitorSettings
   @Published private(set) var nextRefreshAt: Date?
@@ -174,7 +175,9 @@ final class UsageStore: ObservableObject {
   init() {
     self.settings = CodexSettingsStore().load()
     self.isCodexSignedIn = authStore.hasCredentials()
-    self.hasOpenRouterAPIKey = openRouterAPIKeyStore.hasAPIKey()
+    let openRouterKeys = (try? openRouterAPIKeyStore.loadAPIKeyDescriptors()) ?? []
+    self.openRouterAPIKeys = openRouterKeys
+    self.hasOpenRouterAPIKey = !openRouterKeys.isEmpty
     self.serviceLaunchAtLoginEnabled = CodexMonitorServiceLifecycle.isEnabled
     self.hasBeaconAPIKey = (try? beaconAPIKeyStore.currentOrCreateAPIKey()) != nil
     self.beaconAPIURLText = Self.serviceEndpointText(
@@ -251,11 +254,11 @@ final class UsageStore: ObservableObject {
       snapshots = nextSnapshots
       nextRefreshAt = settings.nextRefreshDate(after: Date())
       isCodexSignedIn = authStore.hasCredentials()
-      hasOpenRouterAPIKey = openRouterAPIKeyStore.hasAPIKey()
+      refreshOpenRouterAPIKeyState()
       WidgetCenter.shared.reloadAllTimelines()
     } catch {
       isCodexSignedIn = authStore.hasCredentials()
-      hasOpenRouterAPIKey = openRouterAPIKeyStore.hasAPIKey()
+      refreshOpenRouterAPIKeyState()
       errorMessage = error.localizedDescription
     }
   }
@@ -386,9 +389,13 @@ final class UsageStore: ObservableObject {
   }
 
   func saveOpenRouterAPIKey(_ apiKey: String) {
+    saveOpenRouterAPIKey(label: "", apiKey: apiKey)
+  }
+
+  func saveOpenRouterAPIKey(label: String, apiKey: String) {
     do {
-      try openRouterAPIKeyStore.save(apiKey: apiKey)
-      hasOpenRouterAPIKey = openRouterAPIKeyStore.hasAPIKey()
+      try openRouterAPIKeyStore.save(label: label, apiKey: apiKey)
+      refreshOpenRouterAPIKeyState()
       errorMessage = nil
       WidgetCenter.shared.reloadAllTimelines()
     } catch {
@@ -399,12 +406,28 @@ final class UsageStore: ObservableObject {
   func clearOpenRouterAPIKey() {
     do {
       try openRouterAPIKeyStore.clear()
-      hasOpenRouterAPIKey = false
+      refreshOpenRouterAPIKeyState()
       errorMessage = nil
       WidgetCenter.shared.reloadAllTimelines()
     } catch {
       errorMessage = error.localizedDescription
     }
+  }
+
+  func removeOpenRouterAPIKey(id: String) {
+    do {
+      try openRouterAPIKeyStore.removeAPIKey(id: id)
+      refreshOpenRouterAPIKeyState()
+      errorMessage = nil
+      WidgetCenter.shared.reloadAllTimelines()
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  private func refreshOpenRouterAPIKeyState() {
+    openRouterAPIKeys = (try? openRouterAPIKeyStore.loadAPIKeyDescriptors()) ?? []
+    hasOpenRouterAPIKey = !openRouterAPIKeys.isEmpty
   }
 
   private func restartRefreshLoop(runImmediately: Bool) {
@@ -572,7 +595,7 @@ struct ContentView: View {
       }
 
       if !store.displayedSnapshots.isEmpty {
-        ForEach(store.displayedSnapshots, id: \.provider) { snapshot in
+        ForEach(store.displayedSnapshots, id: \.instanceID) { snapshot in
           UsageSummaryView(snapshot: snapshot, showProviderName: true)
         }
       } else {
@@ -599,6 +622,7 @@ struct ContentView: View {
 
 struct SettingsView: View {
   @ObservedObject var store: UsageStore
+  @State private var openRouterAPIKeyLabel = ""
   @State private var openRouterAPIKey = ""
 
   var body: some View {
@@ -634,26 +658,50 @@ struct SettingsView: View {
       VStack(alignment: .leading, spacing: 8) {
         HStack {
           VStack(alignment: .leading, spacing: 4) {
-            Text("OpenRouter API Key")
+            Text("OpenRouter API Keys")
               .font(.headline)
             Text(
               store.hasOpenRouterAPIKey
-                ? "Stored securely in Keychain" : "No OpenRouter key stored"
+                ? "\(store.openRouterAPIKeys.count) key label(s) available" : "No OpenRouter key stored"
             )
             .font(.caption)
             .foregroundStyle(.secondary)
           }
           Spacer()
-          Button("Clear", role: .destructive) {
+          Button("Clear Stored", role: .destructive) {
             store.clearOpenRouterAPIKey()
+            openRouterAPIKeyLabel = ""
             openRouterAPIKey = ""
           }
-          .disabled(!store.hasOpenRouterAPIKey)
+          .disabled(!hasStoredOpenRouterAPIKeys)
         }
+        if !store.openRouterAPIKeys.isEmpty {
+          VStack(alignment: .leading, spacing: 6) {
+            ForEach(store.openRouterAPIKeys) { descriptor in
+              HStack {
+                Text(descriptor.label)
+                  .font(.subheadline)
+                if descriptor.isEnvironment {
+                  Label("Environment", systemImage: "terminal")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Remove", role: .destructive) {
+                  store.removeOpenRouterAPIKey(id: descriptor.id)
+                }
+                .disabled(descriptor.isEnvironment)
+              }
+            }
+          }
+        }
+        TextField("Label", text: $openRouterAPIKeyLabel)
+          .textFieldStyle(.roundedBorder)
         SecureField("sk-or-...", text: $openRouterAPIKey)
           .textFieldStyle(.roundedBorder)
         Button("Save OpenRouter Key") {
-          store.saveOpenRouterAPIKey(openRouterAPIKey)
+          store.saveOpenRouterAPIKey(label: openRouterAPIKeyLabel, apiKey: openRouterAPIKey)
+          openRouterAPIKeyLabel = ""
           openRouterAPIKey = ""
         }
         .disabled(openRouterAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -729,6 +777,10 @@ struct SettingsView: View {
       get: { store.settings.beaconAPIEnabled },
       set: { store.setBeaconAPIEnabled($0) }
     )
+  }
+
+  private var hasStoredOpenRouterAPIKeys: Bool {
+    store.openRouterAPIKeys.contains { !$0.isEnvironment }
   }
 
   private var beaconAPIPortBinding: Binding<Int> {

@@ -163,7 +163,7 @@ struct CodexMonitorWidgetView: View {
         Image(systemName: "gauge.with.dots.needle.bottom.50percent")
           .font(.system(size: family == .systemSmall ? 12 : 13, weight: .semibold))
           .foregroundStyle(.secondary)
-        Text(entry.providerID.displayName)
+        Text(entry.snapshots.first?.displayName ?? entry.providerID.displayName)
           .font(.caption.weight(.semibold))
           .lineLimit(1)
           .minimumScaleFactor(0.75)

@@ -1079,14 +1079,67 @@ final class CodexUsageCoreTests: XCTestCase {
     let snapshot = try OpenRouterUsageParser.parse(
       keyData: keyData,
       creditsData: creditsData,
-      fetchedAt: Date(timeIntervalSince1970: 0)
+      fetchedAt: Date(timeIntervalSince1970: 0),
+      accountID: "personal-id",
+      accountLabel: "Personal"
     )
 
     XCTAssertEqual(snapshot.provider, CodexUsageProviderID.openRouter.rawValue)
+    XCTAssertEqual(snapshot.accountID, "personal-id")
+    XCTAssertEqual(snapshot.accountLabel, "Personal")
+    XCTAssertEqual(snapshot.displayName, "OpenRouter - Personal")
+    XCTAssertEqual(snapshot.instanceID, "openrouter:personal-id")
     XCTAssertEqual(snapshot.fiveHour?.label, "Key limit")
     XCTAssertEqual(snapshot.fiveHour?.remainingPercent, 70)
     XCTAssertEqual(snapshot.weekly?.label, "Credits")
     XCTAssertEqual(try XCTUnwrap(snapshot.weekly?.remainingPercent), 74.6268656716418, accuracy: 0.0001)
+  }
+
+  func testOpenRouterAPIKeyStorePersistsMultipleLabeledKeys() throws {
+    let store = OpenRouterAPIKeyStore(
+      environment: [:],
+      service: "test.openrouter.keys",
+      account: UUID().uuidString,
+      accessGroup: ""
+    )
+    try? store.clear()
+
+    try store.save(label: "Personal", apiKey: " key-one ")
+    try store.save(label: "Work", apiKey: "key-two")
+    try store.save(label: "Personal", apiKey: "key-one-updated")
+
+    var keys = try store.loadAPIKeys()
+    XCTAssertEqual(keys.map(\.label), ["Personal", "Work"])
+    XCTAssertEqual(keys.map(\.apiKey), ["key-one-updated", "key-two"])
+    XCTAssertEqual(try store.loadAPIKeyDescriptors().map(\.label), ["Personal", "Work"])
+
+    try store.removeAPIKey(id: keys[0].id)
+    keys = try store.loadAPIKeys()
+    XCTAssertEqual(keys.map(\.label), ["Work"])
+
+    try store.clear()
+  }
+
+  func testOpenRouterAPIKeyStoreIncludesEnvironmentKeyWithLabel() throws {
+    let store = OpenRouterAPIKeyStore(
+      environment: [
+        "OPENROUTER_API_KEY": "env-key",
+        "OPENROUTER_API_KEY_LABEL": "Env Label",
+      ],
+      service: "test.openrouter.keys",
+      account: UUID().uuidString,
+      accessGroup: ""
+    )
+    try? store.clear()
+    try store.save(label: "Stored", apiKey: "stored-key")
+
+    let keys = try store.loadAPIKeys()
+    XCTAssertEqual(keys.map(\.label), ["Env Label", "Stored"])
+    XCTAssertEqual(keys.map(\.apiKey), ["env-key", "stored-key"])
+    XCTAssertEqual(keys.map(\.isEnvironment), [true, false])
+
+    try store.clear()
+    XCTAssertEqual(try store.loadAPIKeys().map(\.label), ["Env Label"])
   }
 
   func testCacheReadsLegacySingleSnapshot() throws {

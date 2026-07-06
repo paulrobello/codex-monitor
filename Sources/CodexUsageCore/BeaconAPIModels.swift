@@ -230,7 +230,7 @@ public struct BeaconCard: Codable, Equatable, Sendable {
     let kind: BeaconCardKind = isOpenRouter ? .spend : .meter
 
     return BeaconCard(
-      id: snapshot.provider,
+      id: snapshot.instanceID,
       provider: snapshot.provider,
       title: providerID?.beaconTitle ?? snapshot.displayName.uppercased(),
       subtitle: providerID?.beaconSubtitle ?? "STATUS",

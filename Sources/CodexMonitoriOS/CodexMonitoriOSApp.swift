@@ -43,6 +43,7 @@ final class iOSUsageStore: ObservableObject {
   @Published var isRefreshing = false
   @Published private(set) var isCodexSignedIn = false
   @Published private(set) var hasOpenRouterAPIKey = false
+  @Published private(set) var openRouterAPIKeys: [OpenRouterAPIKeyDescriptor] = []
   @Published var errorMessage: String?
   @Published private(set) var settings: CodexMonitorSettings
   @Published private(set) var nextRefreshAt: Date?
@@ -60,7 +61,9 @@ final class iOSUsageStore: ObservableObject {
   init() {
     self.settings = CodexSettingsStore().load()
     self.isCodexSignedIn = authStore.hasCredentials()
-    self.hasOpenRouterAPIKey = openRouterAPIKeyStore.hasAPIKey()
+    let openRouterKeys = (try? openRouterAPIKeyStore.loadAPIKeyDescriptors()) ?? []
+    self.openRouterAPIKeys = openRouterKeys
+    self.hasOpenRouterAPIKey = !openRouterKeys.isEmpty
   }
 
   deinit {
@@ -106,11 +109,11 @@ final class iOSUsageStore: ObservableObject {
       snapshots = nextSnapshots
       nextRefreshAt = settings.nextRefreshDate(after: Date())
       isCodexSignedIn = authStore.hasCredentials()
-      hasOpenRouterAPIKey = openRouterAPIKeyStore.hasAPIKey()
+      refreshOpenRouterAPIKeyState()
       WidgetCenter.shared.reloadAllTimelines()
     } catch {
       isCodexSignedIn = authStore.hasCredentials()
-      hasOpenRouterAPIKey = openRouterAPIKeyStore.hasAPIKey()
+      refreshOpenRouterAPIKeyState()
       errorMessage = error.localizedDescription
     }
   }
@@ -208,9 +211,13 @@ final class iOSUsageStore: ObservableObject {
   }
 
   func saveOpenRouterAPIKey(_ apiKey: String) {
+    saveOpenRouterAPIKey(label: "", apiKey: apiKey)
+  }
+
+  func saveOpenRouterAPIKey(label: String, apiKey: String) {
     do {
-      try openRouterAPIKeyStore.save(apiKey: apiKey)
-      hasOpenRouterAPIKey = openRouterAPIKeyStore.hasAPIKey()
+      try openRouterAPIKeyStore.save(label: label, apiKey: apiKey)
+      refreshOpenRouterAPIKeyState()
       errorMessage = nil
       WidgetCenter.shared.reloadAllTimelines()
     } catch {
@@ -221,12 +228,28 @@ final class iOSUsageStore: ObservableObject {
   func clearOpenRouterAPIKey() {
     do {
       try openRouterAPIKeyStore.clear()
-      hasOpenRouterAPIKey = false
+      refreshOpenRouterAPIKeyState()
       errorMessage = nil
       WidgetCenter.shared.reloadAllTimelines()
     } catch {
       errorMessage = error.localizedDescription
     }
+  }
+
+  func removeOpenRouterAPIKey(id: String) {
+    do {
+      try openRouterAPIKeyStore.removeAPIKey(id: id)
+      refreshOpenRouterAPIKeyState()
+      errorMessage = nil
+      WidgetCenter.shared.reloadAllTimelines()
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  private func refreshOpenRouterAPIKeyState() {
+    openRouterAPIKeys = (try? openRouterAPIKeyStore.loadAPIKeyDescriptors()) ?? []
+    hasOpenRouterAPIKey = !openRouterAPIKeys.isEmpty
   }
 
   func cancelDeviceLogin() {
@@ -320,6 +343,7 @@ final class iOSUsageStore: ObservableObject {
 
 struct iOSContentView: View {
   @ObservedObject var store: iOSUsageStore
+  @State private var openRouterAPIKeyLabel = ""
   @State private var openRouterAPIKey = ""
 
   var body: some View {
@@ -327,7 +351,7 @@ struct iOSContentView: View {
       List {
         Section {
           if !store.displayedSnapshots.isEmpty {
-            ForEach(store.displayedSnapshots, id: \.provider) { snapshot in
+            ForEach(store.displayedSnapshots, id: \.instanceID) { snapshot in
               iOSUsageSummaryView(
                 snapshot: snapshot,
                 nextRefreshAt: store.nextRefreshAt,
@@ -396,27 +420,49 @@ struct iOSContentView: View {
           )
 
           VStack(alignment: .leading, spacing: 8) {
-            Text("OpenRouter API Key")
+            Text("OpenRouter API Keys")
             Text(
               store.hasOpenRouterAPIKey
-                ? "Stored securely in Keychain" : "No OpenRouter key stored"
+                ? "\(store.openRouterAPIKeys.count) key label(s) available" : "No OpenRouter key stored"
             )
             .font(.caption)
             .foregroundStyle(.secondary)
+            if !store.openRouterAPIKeys.isEmpty {
+              ForEach(store.openRouterAPIKeys) { descriptor in
+                HStack {
+                  Text(descriptor.label)
+                  if descriptor.isEnvironment {
+                    Label("Environment", systemImage: "terminal")
+                      .font(.caption)
+                      .foregroundStyle(.secondary)
+                  }
+                  Spacer()
+                  Button("Remove", role: .destructive) {
+                    store.removeOpenRouterAPIKey(id: descriptor.id)
+                  }
+                  .disabled(descriptor.isEnvironment)
+                }
+              }
+            }
+            TextField("Label", text: $openRouterAPIKeyLabel)
+              .textInputAutocapitalization(.never)
+              .autocorrectionDisabled()
             SecureField("sk-or-...", text: $openRouterAPIKey)
               .textInputAutocapitalization(.never)
               .autocorrectionDisabled()
             HStack {
               Button("Save") {
-                store.saveOpenRouterAPIKey(openRouterAPIKey)
+                store.saveOpenRouterAPIKey(label: openRouterAPIKeyLabel, apiKey: openRouterAPIKey)
+                openRouterAPIKeyLabel = ""
                 openRouterAPIKey = ""
               }
               .disabled(openRouterAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-              Button("Clear", role: .destructive) {
+              Button("Clear Stored", role: .destructive) {
                 store.clearOpenRouterAPIKey()
+                openRouterAPIKeyLabel = ""
                 openRouterAPIKey = ""
               }
-              .disabled(!store.hasOpenRouterAPIKey)
+              .disabled(!hasStoredOpenRouterAPIKeys)
             }
           }
 
@@ -482,6 +528,10 @@ struct iOSContentView: View {
       get: { store.settings.enabledProviders.contains(provider) },
       set: { store.setProvider(provider, enabled: $0) }
     )
+  }
+
+  private var hasStoredOpenRouterAPIKeys: Bool {
+    store.openRouterAPIKeys.contains { !$0.isEnvironment }
   }
 }
 

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Support multiple labeled OpenRouter API keys and show one usage snapshot per key.
 - Hide cached usage for disabled providers across the app, menu bar, widgets, and Beacon API output.
 - Show the next refresh countdown in the main app instead of the fetched-at age.
 - Schedule widget countdown timeline entries so the macOS widget refresh remaining time advances.

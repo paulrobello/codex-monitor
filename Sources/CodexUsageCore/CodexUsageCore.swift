@@ -29,22 +29,79 @@ public struct CodexUsageWindow: Codable, Equatable, Sendable {
 
 public struct CodexUsageSnapshot: Codable, Equatable, Sendable {
   public var provider: String
+  public var accountID: String?
+  public var accountLabel: String?
   public var fetchedAt: Date
   public var fiveHour: CodexUsageWindow?
   public var weekly: CodexUsageWindow?
 
   public init(
     provider: String = "openai-codex", fetchedAt: Date, fiveHour: CodexUsageWindow?,
-    weekly: CodexUsageWindow?
+    weekly: CodexUsageWindow?,
+    accountID: String? = nil,
+    accountLabel: String? = nil
   ) {
     self.provider = provider
+    self.accountID = accountID
+    self.accountLabel = accountLabel
     self.fetchedAt = fetchedAt
     self.fiveHour = fiveHour
     self.weekly = weekly
   }
 
   public var displayName: String {
-    CodexUsageProviderID(rawValue: provider)?.displayName ?? provider
+    let providerName = CodexUsageProviderID(rawValue: provider)?.displayName ?? provider
+    guard let label = Self.nonEmpty(accountLabel) else {
+      return providerName
+    }
+    return "\(providerName) - \(label)"
+  }
+
+  public var instanceID: String {
+    if let accountID = Self.nonEmpty(accountID) {
+      return "\(provider):\(accountID)"
+    }
+    if let accountLabel = Self.nonEmpty(accountLabel) {
+      return "\(provider):\(accountLabel)"
+    }
+    return provider
+  }
+
+  private static func nonEmpty(_ value: String?) -> String? {
+    guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+      return nil
+    }
+    return value
+  }
+}
+
+public struct OpenRouterAPIKeyDescriptor: Equatable, Sendable, Identifiable {
+  public var id: String
+  public var label: String
+  public var isEnvironment: Bool
+
+  public init(id: String, label: String, isEnvironment: Bool = false) {
+    self.id = id
+    self.label = label
+    self.isEnvironment = isEnvironment
+  }
+}
+
+public struct OpenRouterAPIKeyCredential: Codable, Equatable, Sendable, Identifiable {
+  public var id: String
+  public var label: String
+  public var apiKey: String
+  public var isEnvironment: Bool
+
+  public init(id: String, label: String, apiKey: String, isEnvironment: Bool = false) {
+    self.id = id
+    self.label = label
+    self.apiKey = apiKey
+    self.isEnvironment = isEnvironment
+  }
+
+  public var descriptor: OpenRouterAPIKeyDescriptor {
+    OpenRouterAPIKeyDescriptor(id: id, label: label, isEnvironment: isEnvironment)
   }
 }
 
@@ -280,6 +337,14 @@ public final class OpenRouterAPIKeyStore: @unchecked Sendable {
   public static let service = "net.pardev.CodexMonitor.openrouter-api-key"
   public static let account = "openrouter-api-key"
   public static let accessGroup = CodexKeychainAuthStore.accessGroup
+  private static let environmentID = "environment"
+  private static let legacyID = "default"
+  private static let defaultLabel = "Default"
+
+  private struct StoredAPIKeys: Codable {
+    var version: Int
+    var keys: [OpenRouterAPIKeyCredential]
+  }
 
   private let environment: [String: String]
   private let service: String
@@ -299,18 +364,69 @@ public final class OpenRouterAPIKeyStore: @unchecked Sendable {
   }
 
   public var storageDescription: String {
-    "Keychain item \(service) / \(account)"
+    "OPENROUTER_API_KEY or Keychain item \(service) / \(account)"
   }
 
   public func hasAPIKey() -> Bool {
-    (try? loadAPIKey()) != nil
+    ((try? loadAPIKeys()) ?? []).isEmpty == false
   }
 
   public func loadAPIKey() throws -> String {
-    if let key = nonEmpty(environment["OPENROUTER_API_KEY"]) {
-      return key
+    guard let credential = try loadAPIKeys().first else {
+      throw CodexUsageError.missingOpenRouterAPIKey
     }
+    return credential.apiKey
+  }
 
+  public func loadAPIKeyDescriptors() throws -> [OpenRouterAPIKeyDescriptor] {
+    try loadAPIKeys().map(\.descriptor)
+  }
+
+  public func loadAPIKeys() throws -> [OpenRouterAPIKeyCredential] {
+    var credentials = environmentCredential().map { [$0] } ?? []
+    credentials.append(contentsOf: try loadStoredAPIKeys())
+    return credentials
+  }
+
+  public func save(apiKey: String) throws {
+    guard nonEmpty(apiKey) != nil else {
+      try clear()
+      return
+    }
+    try save(label: Self.defaultLabel, apiKey: apiKey)
+  }
+
+  public func save(label: String, apiKey: String) throws {
+    guard let trimmed = nonEmpty(apiKey) else {
+      return
+    }
+    let trimmedLabel = nonEmpty(label) ?? Self.defaultLabel
+    var credentials = try loadStoredAPIKeys()
+    if let index = credentials.firstIndex(where: { $0.label.caseInsensitiveCompare(trimmedLabel) == .orderedSame }) {
+      credentials[index].label = trimmedLabel
+      credentials[index].apiKey = trimmed
+    } else {
+      credentials.append(
+        OpenRouterAPIKeyCredential(id: UUID().uuidString, label: trimmedLabel, apiKey: trimmed)
+      )
+    }
+    try saveStoredAPIKeys(credentials)
+  }
+
+  public func removeAPIKey(id: String) throws {
+    var credentials = try loadStoredAPIKeys()
+    credentials.removeAll { $0.id == id }
+    try saveStoredAPIKeys(credentials)
+  }
+
+  public func clear() throws {
+    let status = SecItemDelete(baseQuery() as CFDictionary)
+    guard status == errSecSuccess || status == errSecItemNotFound else {
+      throw CodexUsageError.keychainFailed("clear OpenRouter key", status)
+    }
+  }
+
+  private func loadStoredAPIKeys() throws -> [OpenRouterAPIKeyCredential] {
     var query = baseQuery()
     query[kSecReturnData as String] = kCFBooleanTrue
     query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -318,25 +434,31 @@ public final class OpenRouterAPIKeyStore: @unchecked Sendable {
     var item: CFTypeRef?
     let status = SecItemCopyMatching(query as CFDictionary, &item)
     if status == errSecItemNotFound {
-      throw CodexUsageError.missingOpenRouterAPIKey
+      return []
     }
     guard status == errSecSuccess else {
       throw CodexUsageError.keychainFailed("read OpenRouter key", status)
     }
-    guard let data = item as? Data, let key = String(data: data, encoding: .utf8),
-      let trimmed = nonEmpty(key)
-    else {
+    guard let data = item as? Data else {
       throw CodexUsageError.keychainFailed("decode OpenRouter key", errSecInternalComponent)
     }
-    return trimmed
+    return try decodeStoredAPIKeys(from: data)
   }
 
-  public func save(apiKey: String) throws {
-    guard let trimmed = nonEmpty(apiKey) else {
+  private func saveStoredAPIKeys(_ credentials: [OpenRouterAPIKeyCredential]) throws {
+    if credentials.isEmpty {
       try clear()
       return
     }
-    let data = Data(trimmed.utf8)
+    let stored = StoredAPIKeys(version: 1, keys: credentials.map { credential in
+      OpenRouterAPIKeyCredential(
+        id: credential.id,
+        label: credential.label,
+        apiKey: credential.apiKey,
+        isEnvironment: false
+      )
+    })
+    let data = try JSONEncoder().encode(stored)
     let attributes: [String: Any] = [
       kSecValueData as String: data
     ]
@@ -357,11 +479,35 @@ public final class OpenRouterAPIKeyStore: @unchecked Sendable {
     }
   }
 
-  public func clear() throws {
-    let status = SecItemDelete(baseQuery() as CFDictionary)
-    guard status == errSecSuccess || status == errSecItemNotFound else {
-      throw CodexUsageError.keychainFailed("clear OpenRouter key", status)
+  private func decodeStoredAPIKeys(from data: Data) throws -> [OpenRouterAPIKeyCredential] {
+    if let stored = try? JSONDecoder().decode(StoredAPIKeys.self, from: data) {
+      return stored.keys.filter { nonEmpty($0.apiKey) != nil }
     }
+    if let credentials = try? JSONDecoder().decode([OpenRouterAPIKeyCredential].self, from: data) {
+      return credentials.filter { nonEmpty($0.apiKey) != nil }
+    }
+    guard let key = String(data: data, encoding: .utf8), let trimmed = nonEmpty(key) else {
+      throw CodexUsageError.keychainFailed("decode OpenRouter key", errSecInternalComponent)
+    }
+    return [
+      OpenRouterAPIKeyCredential(
+        id: Self.legacyID,
+        label: Self.defaultLabel,
+        apiKey: trimmed
+      )
+    ]
+  }
+
+  private func environmentCredential() -> OpenRouterAPIKeyCredential? {
+    guard let key = nonEmpty(environment["OPENROUTER_API_KEY"]) else {
+      return nil
+    }
+    return OpenRouterAPIKeyCredential(
+      id: Self.environmentID,
+      label: nonEmpty(environment["OPENROUTER_API_KEY_LABEL"]) ?? "Environment",
+      apiKey: key,
+      isEnvironment: true
+    )
   }
 
   private func baseQuery() -> [String: Any] {
@@ -838,14 +984,30 @@ public final class OpenRouterUsageClient: @unchecked Sendable {
     self.urlSession = urlSession
   }
 
-  public func fetchUsage(apiKey: String) async throws -> CodexUsageSnapshot {
+  public func fetchUsage(
+    apiKey: String,
+    accountID: String? = nil,
+    accountLabel: String? = nil
+  ) async throws -> CodexUsageSnapshot {
     async let keyData = fetch(path: "key", apiKey: apiKey)
     async let creditsData = fetch(path: "credits", apiKey: apiKey)
-    return try await OpenRouterUsageParser.parse(keyData: keyData, creditsData: creditsData)
+    return try await OpenRouterUsageParser.parse(
+      keyData: keyData,
+      creditsData: creditsData,
+      accountID: accountID,
+      accountLabel: accountLabel
+    )
   }
 
   public func fetchUsage(apiKeyStore: OpenRouterAPIKeyStore) async throws -> CodexUsageSnapshot {
-    try await fetchUsage(apiKey: apiKeyStore.loadAPIKey())
+    guard let credential = try apiKeyStore.loadAPIKeys().first else {
+      throw CodexUsageError.missingOpenRouterAPIKey
+    }
+    return try await fetchUsage(
+      apiKey: credential.apiKey,
+      accountID: credential.id,
+      accountLabel: credential.label
+    )
   }
 
   private func fetch(path: String, apiKey: String) async throws -> Data {
@@ -867,9 +1029,13 @@ public final class OpenRouterUsageClient: @unchecked Sendable {
 }
 
 public enum OpenRouterUsageParser {
-  public static func parse(keyData: Data, creditsData: Data, fetchedAt: Date = Date()) throws
-    -> CodexUsageSnapshot
-  {
+  public static func parse(
+    keyData: Data,
+    creditsData: Data,
+    fetchedAt: Date = Date(),
+    accountID: String? = nil,
+    accountLabel: String? = nil
+  ) throws -> CodexUsageSnapshot {
     let keyWindow = parseKeyWindow(data: keyData)
     let creditsWindow = parseCreditsWindow(data: creditsData)
     guard keyWindow != nil || creditsWindow != nil else {
@@ -879,7 +1045,9 @@ public enum OpenRouterUsageParser {
       provider: CodexUsageProviderID.openRouter.rawValue,
       fetchedAt: fetchedAt,
       fiveHour: keyWindow,
-      weekly: creditsWindow
+      weekly: creditsWindow,
+      accountID: accountID,
+      accountLabel: accountLabel
     )
   }
 
@@ -1556,7 +1724,19 @@ public final class UsageProviderClient: @unchecked Sendable {
       case .openAICodex:
         snapshots.append(try await codexClient.fetchUsage(authStore: codexAuthStore))
       case .openRouter:
-        snapshots.append(try await openRouterClient.fetchUsage(apiKeyStore: openRouterAPIKeyStore))
+        let credentials = try openRouterAPIKeyStore.loadAPIKeys()
+        guard !credentials.isEmpty else {
+          throw CodexUsageError.missingOpenRouterAPIKey
+        }
+        for credential in credentials {
+          snapshots.append(
+            try await openRouterClient.fetchUsage(
+              apiKey: credential.apiKey,
+              accountID: credential.id,
+              accountLabel: credential.label
+            )
+          )
+        }
       case .claudeCode:
         snapshots.append(try claudeCodeClient.fetchUsage())
       }

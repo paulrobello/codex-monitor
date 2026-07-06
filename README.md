@@ -56,7 +56,7 @@ make launch-phone PHONE_DEVICE="Your Device Name"  # Target a different device
 | Provider | Auth Mechanism | Data Source | Snapshot ID |
 |----------|---------------|-------------|-------------|
 | **OpenAI Codex** | OAuth (PKCE on macOS, device-code on iOS) → Keychain | API: `/wham/usage` or `/api/codex/usage` | `openai-codex` |
-| **OpenRouter** | API key in Keychain (or `OPENROUTER_API_KEY` env) | API: `openrouter.ai/api/v1/key` + `/credits` | `openrouter` |
+| **OpenRouter** | Labeled API keys in Keychain (plus optional `OPENROUTER_API_KEY` env) | API: `openrouter.ai/api/v1/key` + `/credits` | `openrouter` |
 | **Claude Code** | None (reads local files) | Local JSONL tails from `~/.claude/projects/` | `claude-code` |
 
 `UsageProviderClient` orchestrates fetching from all enabled providers. `CodexMonitorSettings.enabledProviders` controls which are active. Cached snapshots are also filtered through the enabled-provider setting before display, so stale usage for a disabled provider does not appear in the app, menu bar, widgets, or Beacon API output.
@@ -105,8 +105,10 @@ macOS uses browser-based OAuth with a local callback server (port 1455). iOS use
 
 API key lookup order:
 
-1. `OPENROUTER_API_KEY` environment variable
-2. Keychain (`OpenRouterAPIKeyStore`)
+1. `OPENROUTER_API_KEY` environment variable, labeled by optional `OPENROUTER_API_KEY_LABEL`
+2. Labeled Keychain entries (`OpenRouterAPIKeyStore`)
+
+Each stored OpenRouter key has a custom label. When OpenRouter is enabled, Codex Monitor fetches one labeled usage snapshot per key.
 
 ### Claude Code
 

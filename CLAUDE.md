@@ -53,15 +53,15 @@ Helper script: `script/build_and_run.sh` — kills existing app, installs, then 
 | Provider | Auth mechanism | Data source | Snapshot provider ID |
 |---|---|---|---|
 | **OpenAI Codex** | OAuth (PKCE/device-code) → Keychain | API: `{baseURL}/wham/usage` or `/api/codex/usage` | `openai-codex` |
-| **OpenRouter** | API key in Keychain (or `OPENROUTER_API_KEY` env) | API: `openrouter.ai/api/v1/key` + `/credits` | `openrouter` |
+| **OpenRouter** | Labeled API keys in Keychain (plus optional `OPENROUTER_API_KEY` env) | API: `openrouter.ai/api/v1/key` + `/credits` | `openrouter` |
 | **Claude Code** | None (reads local files) | Local JSONL tails from `~/.claude/projects/` | `claude-code` |
 
-The cache stores an array of `CodexUsageSnapshot` (one per provider). Backward-compatible: reads legacy single-snapshot format. Display and local API surfaces must filter cached snapshots through `CodexMonitorSettings.enabledProviders` before rendering or reporting provider status.
+The cache stores an array of `CodexUsageSnapshot` (one per provider, or one per labeled OpenRouter key). Backward-compatible: reads legacy single-snapshot format. Display and local API surfaces must filter cached snapshots through `CodexMonitorSettings.enabledProviders` before rendering or reporting provider status.
 
 ### Key Patterns
 
 - **Credential lookup order (Codex):** env vars (`CODEX_MONITOR_ACCESS_TOKEN` / `CODEX_ACCESS_TOKEN`) → Keychain (`CodexKeychainAuthStore`) → legacy `auth.json` files (auto-migrated and deleted)
-- **OpenRouter key lookup:** env var `OPENROUTER_API_KEY` → Keychain (`OpenRouterAPIKeyStore`)
+- **OpenRouter key lookup:** env var `OPENROUTER_API_KEY` (optional label `OPENROUTER_API_KEY_LABEL`) → labeled Keychain entries (`OpenRouterAPIKeyStore`)
 - **Claude Code usage:** reads tails (last 2MB) of up to 12 most-recent `.jsonl` session files under `~/.claude/projects/`, extracts token counts from `type: "assistant"` records
 - **Enabled-provider filtering:** use `filteringDisabledProviders(settings:)` at cache read/display seams so disabled providers do not leak from stale cache entries
 - **App group:** `group.net.pardev.CodexMonitor` — shared between app and widget for cache/settings
