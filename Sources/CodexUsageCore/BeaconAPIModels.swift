@@ -315,7 +315,7 @@ public struct BeaconCard: Codable, Equatable, Sendable {
       return nil
     }
     if providerID == .openRouter {
-      let metric = "\(percent)% CREDITS REMAINING"
+      let metric = "\(percent)% REMAINING"
       if let balance = firstCurrencyToken(in: window.detail ?? window.valueText) {
         return "\(balance) / \(metric)"
       }

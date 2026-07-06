@@ -282,7 +282,7 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(card.kind, .spend)
     XCTAssertEqual(card.value, 75)
     XCTAssertEqual(card.unit, "%")
-    XCTAssertEqual(card.primaryMetric, "$75 / 75% CREDITS REMAINING")
+    XCTAssertEqual(card.primaryMetric, "$75 / 75% REMAINING")
     XCTAssertEqual(card.secondaryMetric, "KEY LIMIT 70%")
     XCTAssertEqual(card.details?.creditsDetail, "$75 balance • $25 used")
     XCTAssertEqual(card.details?.keyLimitDetail, "$35 of $50 left")
