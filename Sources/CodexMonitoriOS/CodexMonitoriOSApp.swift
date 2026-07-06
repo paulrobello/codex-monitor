@@ -485,7 +485,6 @@ struct iOSContentView: View {
           }
         }
       }
-      .navigationTitle("Codex Usage")
       .toolbar {
         ToolbarItemGroup(placement: .topBarTrailing) {
           if store.shouldShowCodexSignIn {

@@ -560,9 +560,6 @@ struct ContentView: View {
     VStack(alignment: .leading, spacing: 18) {
       HStack {
         VStack(alignment: .leading, spacing: 4) {
-          Text("Codex Usage")
-            .font(.title2)
-            .fontWeight(.semibold)
           if let nextRefreshAt = store.nextRefreshAt {
             TimelineView(.periodic(from: .now, by: 1)) { context in
               Text("Next refresh \(CodexRefreshText.remainingText(until: nextRefreshAt, now: context.date))")

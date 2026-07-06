@@ -619,6 +619,21 @@ final class CodexUsageCoreTests: XCTestCase {
     }
   }
 
+  func testAppsDoNotShowCodexOnlyUsageTitle() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let macAppSource = repositoryRoot.appendingPathComponent("Sources/CodexMonitorApp/CodexMonitorApp.swift")
+    let iosAppSource = repositoryRoot.appendingPathComponent("Sources/CodexMonitoriOS/CodexMonitoriOSApp.swift")
+    let macSource = try String(contentsOf: macAppSource, encoding: .utf8)
+    let iosSource = try String(contentsOf: iosAppSource, encoding: .utf8)
+
+    XCTAssertFalse(macSource.contains("Text(\"Codex Usage\")"))
+    XCTAssertFalse(iosSource.contains(".navigationTitle(\"Codex Usage\")"))
+  }
+
   func testWidgetUsesMinuteOnlyRefreshTextUntilFinalMinute() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let repositoryRoot = testFile
