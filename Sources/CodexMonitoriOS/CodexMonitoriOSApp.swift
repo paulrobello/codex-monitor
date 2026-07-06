@@ -39,6 +39,8 @@ struct CodexMonitoriOSApp: App {
 
 @MainActor
 final class iOSUsageStore: ObservableObject {
+  private static let supportedProviders: [CodexUsageProviderID] = [.openAICodex, .openRouter]
+
   @Published var snapshots: [CodexUsageSnapshot] = []
   @Published var isRefreshing = false
   @Published private(set) var isCodexSignedIn = false
@@ -59,11 +61,16 @@ final class iOSUsageStore: ObservableObject {
   private var deviceLoginTask: Task<Void, Never>?
 
   init() {
-    self.settings = CodexSettingsStore().load()
+    let loadedSettings = CodexSettingsStore().load()
+    let supportedSettings = Self.settingsWithSupportedProviders(loadedSettings)
+    self.settings = supportedSettings
     self.isCodexSignedIn = authStore.hasCredentials()
     let openRouterKeys = (try? openRouterAPIKeyStore.loadAPIKeyDescriptors()) ?? []
     self.openRouterAPIKeys = openRouterKeys
     self.hasOpenRouterAPIKey = !openRouterKeys.isEmpty
+    if supportedSettings != loadedSettings {
+      try? settingsStore.save(supportedSettings)
+    }
   }
 
   deinit {
@@ -185,6 +192,9 @@ final class iOSUsageStore: ObservableObject {
   }
 
   func setProvider(_ provider: CodexUsageProviderID, enabled: Bool) {
+    guard Self.supportedProviders.contains(provider) else {
+      return
+    }
     var providers = settings.enabledProviders
     if enabled {
       providers.append(provider)
@@ -208,6 +218,18 @@ final class iOSUsageStore: ObservableObject {
     } catch {
       errorMessage = error.localizedDescription
     }
+  }
+
+  private static func settingsWithSupportedProviders(_ settings: CodexMonitorSettings)
+    -> CodexMonitorSettings
+  {
+    CodexMonitorSettings(
+      refreshIntervalMinutes: settings.refreshIntervalMinutes,
+      enabledProviders: settings.enabledProviders.filter { supportedProviders.contains($0) },
+      beaconAPIEnabled: settings.beaconAPIEnabled,
+      beaconAPIPort: settings.beaconAPIPort,
+      beaconProviderColors: settings.beaconProviderColors
+    )
   }
 
   func saveOpenRouterAPIKey(_ apiKey: String) {
@@ -413,10 +435,6 @@ struct iOSContentView: View {
           Toggle(
             CodexUsageProviderID.openRouter.displayName,
             isOn: providerBinding(.openRouter)
-          )
-          Toggle(
-            CodexUsageProviderID.claudeCode.displayName,
-            isOn: providerBinding(.claudeCode)
           )
 
           VStack(alignment: .leading, spacing: 8) {

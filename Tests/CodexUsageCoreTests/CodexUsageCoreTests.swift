@@ -717,6 +717,27 @@ final class CodexUsageCoreTests: XCTestCase {
       widgetSource.contains("#if os(macOS)\n    case .claudeCode:\n      return .claudeCode\n    #endif"))
   }
 
+  func testIOSAppExcludesClaudeCodeProviderSupport() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let iosSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent("Sources/CodexMonitoriOS/CodexMonitoriOSApp.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(
+      iosSource.contains(
+        "private static let supportedProviders: [CodexUsageProviderID] = [.openAICodex, .openRouter]"
+      ))
+    XCTAssertTrue(iosSource.contains("settings.enabledProviders.filter { supportedProviders.contains($0) }"))
+    XCTAssertTrue(iosSource.contains("guard Self.supportedProviders.contains(provider) else"))
+    XCTAssertFalse(iosSource.contains("providerBinding(.claudeCode)"))
+    XCTAssertFalse(iosSource.contains("CodexUsageProviderID.claudeCode.displayName"))
+  }
+
   func testMacAppUsesCollectionServiceForRefreshes() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let repositoryRoot = testFile
