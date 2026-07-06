@@ -405,6 +405,9 @@ public final class OpenRouterAPIKeyStore: @unchecked Sendable {
     if let index = credentials.firstIndex(where: { $0.label.caseInsensitiveCompare(trimmedLabel) == .orderedSame }) {
       credentials[index].label = trimmedLabel
       credentials[index].apiKey = trimmed
+    } else if let index = credentials.firstIndex(where: { nonEmpty($0.apiKey) == trimmed }) {
+      credentials[index].label = trimmedLabel
+      credentials[index].apiKey = trimmed
     } else {
       credentials.append(
         OpenRouterAPIKeyCredential(id: UUID().uuidString, label: trimmedLabel, apiKey: trimmed)
@@ -442,10 +445,11 @@ public final class OpenRouterAPIKeyStore: @unchecked Sendable {
     guard let data = item as? Data else {
       throw CodexUsageError.keychainFailed("decode OpenRouter key", errSecInternalComponent)
     }
-    return try decodeStoredAPIKeys(from: data)
+    return normalizedStoredAPIKeys(try decodeStoredAPIKeys(from: data))
   }
 
   private func saveStoredAPIKeys(_ credentials: [OpenRouterAPIKeyCredential]) throws {
+    let credentials = normalizedStoredAPIKeys(credentials)
     if credentials.isEmpty {
       try clear()
       return
@@ -496,6 +500,32 @@ public final class OpenRouterAPIKeyStore: @unchecked Sendable {
         apiKey: trimmed
       )
     ]
+  }
+
+  private func normalizedStoredAPIKeys(_ credentials: [OpenRouterAPIKeyCredential]) -> [OpenRouterAPIKeyCredential] {
+    var normalized: [OpenRouterAPIKeyCredential] = []
+    for credential in credentials {
+      guard let apiKey = nonEmpty(credential.apiKey) else {
+        continue
+      }
+      let label = nonEmpty(credential.label) ?? Self.defaultLabel
+      let next = OpenRouterAPIKeyCredential(
+        id: credential.id,
+        label: label,
+        apiKey: apiKey,
+        isEnvironment: false
+      )
+      if let index = normalized.firstIndex(where: { $0.label.caseInsensitiveCompare(label) == .orderedSame }) {
+        normalized[index] = next
+      } else if let index = normalized.firstIndex(where: { $0.apiKey == apiKey }) {
+        if normalized[index].label == Self.defaultLabel || label != Self.defaultLabel {
+          normalized[index] = next
+        }
+      } else {
+        normalized.append(next)
+      }
+    }
+    return normalized
   }
 
   private func environmentCredential() -> OpenRouterAPIKeyCredential? {

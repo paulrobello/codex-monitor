@@ -1120,6 +1120,27 @@ final class CodexUsageCoreTests: XCTestCase {
     try store.clear()
   }
 
+  func testOpenRouterAPIKeyStoreRelabelsDefaultKeyByAPIKey() throws {
+    let store = OpenRouterAPIKeyStore(
+      environment: [:],
+      service: "test.openrouter.keys",
+      account: UUID().uuidString,
+      accessGroup: ""
+    )
+    try? store.clear()
+
+    try store.save(apiKey: "default-key")
+    XCTAssertEqual(try store.loadAPIKeys().map(\.label), ["Default"])
+
+    try store.save(label: "Personal", apiKey: "default-key")
+
+    let keys = try store.loadAPIKeys()
+    XCTAssertEqual(keys.map(\.label), ["Personal"])
+    XCTAssertEqual(keys.map(\.apiKey), ["default-key"])
+
+    try store.clear()
+  }
+
   func testOpenRouterAPIKeyStoreIncludesEnvironmentKeyWithLabel() throws {
     let store = OpenRouterAPIKeyStore(
       environment: [
