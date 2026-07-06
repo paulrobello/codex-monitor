@@ -125,6 +125,11 @@ Widgets and the app read the shared cache directly, filtered by the enabled
 provider list in settings. Beacon reads the same filtered cache through the
 local HTTP API.
 
+OpenRouter exports one Beacon card per saved API key. Each card keeps the
+provider title as `OPENROUTER`, sets `subtitle` and `label` to the saved key
+label, and uses the key-specific snapshot id so multiple OpenRouter cards do
+not collapse into one provider card.
+
 ## CLI
 
 Build and use the `codex-usage` CLI:
