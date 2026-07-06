@@ -778,8 +778,32 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(appSource.contains("serviceEndpointText"))
     XCTAssertTrue(appSource.contains("syncServiceLaunchStateIfNeeded"))
     XCTAssertTrue(appSource.contains("CodexMonitorServiceLifecycle.isEnabled"))
+    XCTAssertTrue(appSource.contains("Text(\"Add OpenRouter API Key\")"))
+    XCTAssertTrue(appSource.contains("TextField(\"Key label\""))
+    XCTAssertTrue(appSource.contains("Button(\"Save Label\")"))
+    XCTAssertTrue(appSource.contains("Button(\"Add Key\")"))
+    XCTAssertTrue(appSource.contains("renameOpenRouterAPIKey"))
     XCTAssertFalse(appSource.contains("beaconHTTPServer"))
     XCTAssertFalse(appSource.contains("startBeaconServerIfNeeded"))
+  }
+
+  func testIOSSettingsExposeOpenRouterLabelEditingAndAddKeyControls() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let iosSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent(
+        "Sources/CodexMonitoriOS/CodexMonitoriOSApp.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(iosSource.contains("Text(\"Add OpenRouter API Key\")"))
+    XCTAssertTrue(iosSource.contains("TextField(\"Key label\""))
+    XCTAssertTrue(iosSource.contains("Button(\"Save Label\")"))
+    XCTAssertTrue(iosSource.contains("Button(\"Add Key\")"))
+    XCTAssertTrue(iosSource.contains("renameOpenRouterAPIKey"))
   }
 
   func testMacAppCentralizesServiceLifecycleDetection() throws {
@@ -1173,6 +1197,68 @@ final class CodexUsageCoreTests: XCTestCase {
     let keys = try store.loadAPIKeys()
     XCTAssertEqual(keys.map(\.label), ["Personal"])
     XCTAssertEqual(keys.map(\.apiKey), ["default-key"])
+
+    try store.clear()
+  }
+
+  func testOpenRouterAPIKeyStoreRelabelsKeyByIDWithoutAPIKey() throws {
+    let store = OpenRouterAPIKeyStore(
+      environment: [:],
+      service: "test.openrouter.keys",
+      account: UUID().uuidString,
+      accessGroup: ""
+    )
+    try? store.clear()
+
+    try store.save(apiKey: "default-key")
+    let descriptor = try XCTUnwrap(store.loadAPIKeyDescriptors().first)
+
+    try store.updateLabel(id: descriptor.id, label: "Personal")
+
+    let keys = try store.loadAPIKeys()
+    XCTAssertEqual(keys.map(\.label), ["Personal"])
+    XCTAssertEqual(keys.map(\.apiKey), ["default-key"])
+
+    try store.clear()
+  }
+
+  func testOpenRouterAPIKeyStoreKeepsMultipleBlankLabeledKeys() throws {
+    let store = OpenRouterAPIKeyStore(
+      environment: [:],
+      service: "test.openrouter.keys",
+      account: UUID().uuidString,
+      accessGroup: ""
+    )
+    try? store.clear()
+
+    try store.save(label: "", apiKey: "key-one")
+    try store.save(label: "", apiKey: "key-two")
+
+    let keys = try store.loadAPIKeys()
+    XCTAssertEqual(keys.map(\.label), ["Default", "Default 2"])
+    XCTAssertEqual(keys.map(\.apiKey), ["key-one", "key-two"])
+
+    try store.clear()
+  }
+
+  func testOpenRouterAPIKeyStoreRelabelKeepsExistingLabelOwner() throws {
+    let store = OpenRouterAPIKeyStore(
+      environment: [:],
+      service: "test.openrouter.keys",
+      account: UUID().uuidString,
+      accessGroup: ""
+    )
+    try? store.clear()
+
+    try store.save(label: "Personal", apiKey: "key-one")
+    try store.save(label: "Work", apiKey: "key-two")
+    let work = try XCTUnwrap(store.loadAPIKeyDescriptors().first { $0.label == "Work" })
+
+    try store.updateLabel(id: work.id, label: "Personal")
+
+    let keys = try store.loadAPIKeys()
+    XCTAssertEqual(keys.map(\.label), ["Personal", "Personal 2"])
+    XCTAssertEqual(keys.map(\.apiKey), ["key-one", "key-two"])
 
     try store.clear()
   }

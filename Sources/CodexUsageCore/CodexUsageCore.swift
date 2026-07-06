@@ -400,19 +400,39 @@ public final class OpenRouterAPIKeyStore: @unchecked Sendable {
     guard let trimmed = nonEmpty(apiKey) else {
       return
     }
-    let trimmedLabel = nonEmpty(label) ?? Self.defaultLabel
+    let explicitLabel = nonEmpty(label)
+    let trimmedLabel = explicitLabel ?? Self.defaultLabel
     var credentials = try loadStoredAPIKeys()
-    if let index = credentials.firstIndex(where: { $0.label.caseInsensitiveCompare(trimmedLabel) == .orderedSame }) {
+    if let explicitLabel,
+      let index = credentials.firstIndex(where: { $0.label.caseInsensitiveCompare(explicitLabel) == .orderedSame })
+    {
       credentials[index].label = trimmedLabel
       credentials[index].apiKey = trimmed
     } else if let index = credentials.firstIndex(where: { nonEmpty($0.apiKey) == trimmed }) {
-      credentials[index].label = trimmedLabel
+      credentials[index].label = explicitLabel ?? credentials[index].label
       credentials[index].apiKey = trimmed
     } else {
       credentials.append(
-        OpenRouterAPIKeyCredential(id: UUID().uuidString, label: trimmedLabel, apiKey: trimmed)
+        OpenRouterAPIKeyCredential(
+          id: UUID().uuidString,
+          label: explicitLabel ?? nextDefaultLabel(in: credentials),
+          apiKey: trimmed
+        )
       )
     }
+    try saveStoredAPIKeys(credentials)
+  }
+
+  public func updateLabel(id: String, label: String) throws {
+    var credentials = try loadStoredAPIKeys()
+    guard let index = credentials.firstIndex(where: { $0.id == id }) else {
+      return
+    }
+    credentials[index].label = uniqueLabel(
+      nonEmpty(label) ?? Self.defaultLabel,
+      in: credentials,
+      excluding: id
+    )
     try saveStoredAPIKeys(credentials)
   }
 
@@ -526,6 +546,30 @@ public final class OpenRouterAPIKeyStore: @unchecked Sendable {
       }
     }
     return normalized
+  }
+
+  private func nextDefaultLabel(in credentials: [OpenRouterAPIKeyCredential]) -> String {
+    uniqueLabel(Self.defaultLabel, in: credentials, excluding: nil)
+  }
+
+  private func uniqueLabel(
+    _ baseLabel: String,
+    in credentials: [OpenRouterAPIKeyCredential],
+    excluding id: String?
+  ) -> String {
+    let labels = Set(
+      credentials
+        .filter { $0.id != id }
+        .map { $0.label.lowercased() }
+    )
+    guard labels.contains(baseLabel.lowercased()) else {
+      return baseLabel
+    }
+    var suffix = 2
+    while labels.contains("\(baseLabel) \(suffix)".lowercased()) {
+      suffix += 1
+    }
+    return "\(baseLabel) \(suffix)"
   }
 
   private func environmentCredential() -> OpenRouterAPIKeyCredential? {

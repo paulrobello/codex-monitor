@@ -247,6 +247,17 @@ final class iOSUsageStore: ObservableObject {
     }
   }
 
+  func renameOpenRouterAPIKey(id: String, label: String) {
+    do {
+      try openRouterAPIKeyStore.updateLabel(id: id, label: label)
+      refreshOpenRouterAPIKeyState()
+      errorMessage = nil
+      WidgetCenter.shared.reloadAllTimelines()
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
   func clearOpenRouterAPIKey() {
     do {
       try openRouterAPIKeyStore.clear()
@@ -367,6 +378,7 @@ struct iOSContentView: View {
   @ObservedObject var store: iOSUsageStore
   @State private var openRouterAPIKeyLabel = ""
   @State private var openRouterAPIKey = ""
+  @State private var openRouterLabelEdits: [String: String] = [:]
 
   var body: some View {
     NavigationStack {
@@ -447,29 +459,41 @@ struct iOSContentView: View {
             .foregroundStyle(.secondary)
             if !store.openRouterAPIKeys.isEmpty {
               ForEach(store.openRouterAPIKeys) { descriptor in
-                HStack {
-                  Text(descriptor.label)
+                VStack(alignment: .leading, spacing: 6) {
+                  TextField("Key label", text: openRouterLabelBinding(for: descriptor))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .disabled(descriptor.isEnvironment)
                   if descriptor.isEnvironment {
                     Label("Environment", systemImage: "terminal")
                       .font(.caption)
                       .foregroundStyle(.secondary)
                   }
-                  Spacer()
-                  Button("Remove", role: .destructive) {
-                    store.removeOpenRouterAPIKey(id: descriptor.id)
+                  HStack {
+                    Button("Save Label") {
+                      store.renameOpenRouterAPIKey(id: descriptor.id, label: editedOpenRouterLabel(for: descriptor))
+                      openRouterLabelEdits[descriptor.id] = nil
+                    }
+                    .disabled(openRouterLabelSaveDisabled(for: descriptor))
+                    Button("Remove", role: .destructive) {
+                      store.removeOpenRouterAPIKey(id: descriptor.id)
+                      openRouterLabelEdits[descriptor.id] = nil
+                    }
+                    .disabled(descriptor.isEnvironment)
                   }
-                  .disabled(descriptor.isEnvironment)
                 }
               }
             }
-            TextField("Label", text: $openRouterAPIKeyLabel)
+            Text("Add OpenRouter API Key")
+              .font(.subheadline)
+            TextField("New key label (optional)", text: $openRouterAPIKeyLabel)
               .textInputAutocapitalization(.never)
               .autocorrectionDisabled()
             SecureField("sk-or-...", text: $openRouterAPIKey)
               .textInputAutocapitalization(.never)
               .autocorrectionDisabled()
             HStack {
-              Button("Save") {
+              Button("Add Key") {
                 store.saveOpenRouterAPIKey(label: openRouterAPIKeyLabel, apiKey: openRouterAPIKey)
                 openRouterAPIKeyLabel = ""
                 openRouterAPIKey = ""
@@ -479,6 +503,7 @@ struct iOSContentView: View {
                 store.clearOpenRouterAPIKey()
                 openRouterAPIKeyLabel = ""
                 openRouterAPIKey = ""
+                openRouterLabelEdits = [:]
               }
               .disabled(!hasStoredOpenRouterAPIKeys)
             }
@@ -549,6 +574,23 @@ struct iOSContentView: View {
 
   private var hasStoredOpenRouterAPIKeys: Bool {
     store.openRouterAPIKeys.contains { !$0.isEnvironment }
+  }
+
+  private func openRouterLabelBinding(for descriptor: OpenRouterAPIKeyDescriptor) -> Binding<String> {
+    Binding(
+      get: { openRouterLabelEdits[descriptor.id] ?? descriptor.label },
+      set: { openRouterLabelEdits[descriptor.id] = $0 }
+    )
+  }
+
+  private func editedOpenRouterLabel(for descriptor: OpenRouterAPIKeyDescriptor) -> String {
+    openRouterLabelEdits[descriptor.id] ?? descriptor.label
+  }
+
+  private func openRouterLabelSaveDisabled(for descriptor: OpenRouterAPIKeyDescriptor) -> Bool {
+    descriptor.isEnvironment
+      || editedOpenRouterLabel(for: descriptor).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      || editedOpenRouterLabel(for: descriptor) == descriptor.label
   }
 }
 
