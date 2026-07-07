@@ -64,8 +64,10 @@ struct OpenRouterWidgetKeyQuery: EntityQuery {
   func entities(for identifiers: [OpenRouterWidgetKeyChoice.ID]) async throws
     -> [OpenRouterWidgetKeyChoice]
   {
-    let requested = Set(identifiers)
-    return openRouterKeyChoices().filter { requested.contains($0.id) }
+    let choices = openRouterKeyChoices()
+    return identifiers.compactMap { identifier in
+      openRouterKeyChoice(matching: identifier, choices: choices)
+    }
   }
 
   func suggestedEntities() async throws -> [OpenRouterWidgetKeyChoice] {
@@ -113,6 +115,40 @@ struct OpenRouterWidgetKeyQuery: EntityQuery {
       choices.append(choice)
     }
     return choices
+  }
+
+  private func openRouterKeyChoice(
+    matching identifier: String,
+    choices: [OpenRouterWidgetKeyChoice]
+  ) -> OpenRouterWidgetKeyChoice? {
+    guard let requestedID = nonEmpty(identifier) else {
+      return nil
+    }
+    if let choice = choices.first(where: { $0.id == requestedID }) {
+      return choice
+    }
+    let legacyMatch = choices.first { choice in
+      legacyOpenRouterWidgetKeyIDs(for: choice).contains { legacyID in
+        legacyID.caseInsensitiveCompare(requestedID) == .orderedSame
+      }
+    }
+    guard let choice = legacyMatch else {
+      return nil
+    }
+    return OpenRouterWidgetKeyChoice(id: requestedID, label: choice.label)
+  }
+
+  private func legacyOpenRouterWidgetKeyIDs(for choice: OpenRouterWidgetKeyChoice) -> [String] {
+    [choice.id, choice.label].flatMap { value in
+      [value, "\(CodexUsageProviderID.openRouter.rawValue):\(value)"]
+    }
+  }
+
+  private func nonEmpty(_ value: String?) -> String? {
+    guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+      return nil
+    }
+    return trimmed
   }
 }
 
@@ -643,8 +679,13 @@ private extension CodexUsageSnapshot {
   }
 
   func matchesOpenRouterWidgetKey(id: String?, label: String?) -> Bool {
-    if let id = nonEmpty(id), openRouterWidgetKeyID == id {
-      return true
+    if let id = nonEmpty(id) {
+      if openRouterWidgetKeyID == id {
+        return true
+      }
+      if legacyOpenRouterWidgetKeyIDs.contains(where: { $0.caseInsensitiveCompare(id) == .orderedSame }) {
+        return true
+      }
     }
 
     guard let label = nonEmpty(label) else {
@@ -659,6 +700,12 @@ private extension CodexUsageSnapshot {
       return true
     }
     return false
+  }
+
+  private var legacyOpenRouterWidgetKeyIDs: [String] {
+    [openRouterWidgetKeyID, accountLabel, openRouterWidgetKeyLabel].compactMap { nonEmpty($0) }.flatMap { value in
+      [value, "\(CodexUsageProviderID.openRouter.rawValue):\(value)"]
+    } + [instanceID]
   }
 
   private func nonEmpty(_ value: String?) -> String? {

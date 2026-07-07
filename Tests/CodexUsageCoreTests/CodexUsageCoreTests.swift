@@ -1007,6 +1007,9 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("var openRouterKey: OpenRouterWidgetKeyChoice?"))
     XCTAssertTrue(widgetSource.contains("struct OpenRouterWidgetKeyChoice: AppEntity"))
     XCTAssertTrue(widgetSource.contains("struct OpenRouterWidgetKeyQuery: EntityQuery"))
+    XCTAssertTrue(widgetSource.contains("return identifiers.compactMap { identifier in"))
+    XCTAssertTrue(widgetSource.contains("openRouterKeyChoice(matching: identifier, choices: choices)"))
+    XCTAssertTrue(widgetSource.contains("OpenRouterWidgetKeyChoice(id: requestedID, label: choice.label)"))
     XCTAssertTrue(widgetSource.contains("let settingsChoices = CodexSettingsStore().loadIfPresent()?.openRouterAPIKeyDescriptors.map"))
     XCTAssertTrue(widgetSource.contains("OpenRouterAPIKeyStore().loadAPIKeyDescriptors()"))
     XCTAssertTrue(widgetSource.contains("OpenRouterWidgetKeyChoice(id: descriptor.id, label: descriptor.label)"))
@@ -1029,6 +1032,8 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("openRouterKeyID: configuration.openRouterKeyID"))
     XCTAssertTrue(widgetSource.contains("openRouterKeyLabel: openRouterKeyLabel"))
     XCTAssertTrue(widgetSource.contains("snapshot.matchesOpenRouterWidgetKey(id: openRouterKeyID, label: openRouterKeyLabel)"))
+    XCTAssertTrue(widgetSource.contains("\"\\(CodexUsageProviderID.openRouter.rawValue):\\(value)\""))
+    XCTAssertTrue(widgetSource.contains("if legacyOpenRouterWidgetKeyIDs.contains(where: { $0.caseInsensitiveCompare(id) == .orderedSame })"))
     XCTAssertTrue(widgetSource.contains("private func resolvedOpenRouterKeyLabel("))
     XCTAssertTrue(widgetSource.contains("CodexSettingsStore().loadIfPresent()?.openRouterAPIKeyDescriptors.first"))
     XCTAssertTrue(widgetSource.contains("OpenRouterAPIKeyStore().loadAPIKeyDescriptors().first"))
@@ -1331,7 +1336,7 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 10"))
+    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 11"))
   }
 
   func testKeychainStoresCanOmitAccessGroupForUnprovisionedCLI() throws {
