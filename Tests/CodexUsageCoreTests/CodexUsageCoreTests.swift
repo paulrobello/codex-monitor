@@ -743,12 +743,20 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(widgetSource.contains("let providerID = effectiveProviderID(configuration: configuration, settings: settings)"))
+    XCTAssertTrue(widgetSource.contains("let snapshots = cachedSnapshots().filteringDisabledProviders(settings: settings)"))
+    XCTAssertTrue(
+      widgetSource.contains(
+        "let providerID = effectiveProviderID(configuration: configuration, settings: settings, snapshots: snapshots)"
+      ))
     XCTAssertTrue(widgetSource.contains("providerID: providerID"))
-    XCTAssertTrue(widgetSource.contains("providerID: providerID,\n        settings: settings"))
+    XCTAssertTrue(widgetSource.contains("providerID: providerID,\n        snapshots: snapshots"))
     XCTAssertTrue(widgetSource.contains("private func effectiveProviderID("))
     XCTAssertTrue(widgetSource.contains("settings.enabledProviders.contains(configuredProviderID)"))
-    XCTAssertTrue(widgetSource.contains("return settings.enabledProviders.first ?? configuredProviderID"))
+    XCTAssertTrue(widgetSource.contains("snapshots.contains(where: { $0.provider == configuredProviderID.rawValue })"))
+    XCTAssertTrue(widgetSource.contains("let providerWithCachedSnapshot = settings.enabledProviders.first { providerID in"))
+    XCTAssertTrue(widgetSource.contains("snapshots.contains(where: { $0.provider == providerID.rawValue })"))
+    XCTAssertTrue(
+      widgetSource.contains("return providerWithCachedSnapshot ?? settings.enabledProviders.first ?? configuredProviderID"))
   }
 
   func testIOSWidgetProviderPickerExcludesClaudeCode() throws {
@@ -957,8 +965,8 @@ final class CodexUsageCoreTests: XCTestCase {
         "forcePercentDisplay: snapshot.provider == CodexUsageProviderID.claudeCode.rawValue"))
     XCTAssertTrue(widgetSource.contains("var forcePercentDisplay = false"))
     XCTAssertTrue(widgetSource.contains("if !forcePercentDisplay, let valueText = window.valueText"))
-    XCTAssertTrue(widgetSource.contains("@Parameter(title: \"Show Key Usage\")"))
-    XCTAssertTrue(widgetSource.contains("@Parameter(title: \"Show Credits\")"))
+    XCTAssertTrue(widgetSource.contains("@Parameter(title: \"Show Key Usage\", default: true)"))
+    XCTAssertTrue(widgetSource.contains("@Parameter(title: \"Show Credits\", default: true)"))
     XCTAssertTrue(widgetSource.contains("@Parameter(title: \"OpenRouter Key\")"))
     XCTAssertTrue(widgetSource.contains("var showsOpenRouterKeyUsage: Bool?"))
     XCTAssertTrue(widgetSource.contains("var showsOpenRouterCredits: Bool?"))

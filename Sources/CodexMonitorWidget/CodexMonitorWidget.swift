@@ -118,10 +118,10 @@ struct CodexWidgetConfigurationIntent: WidgetConfigurationIntent {
   @Parameter(title: "Provider")
   var provider: CodexWidgetProviderChoice?
 
-  @Parameter(title: "Show Key Usage")
+  @Parameter(title: "Show Key Usage", default: true)
   var showsOpenRouterKeyUsage: Bool?
 
-  @Parameter(title: "Show Credits")
+  @Parameter(title: "Show Credits", default: true)
   var showsOpenRouterCredits: Bool?
 
   @Parameter(title: "OpenRouter Key")
@@ -207,14 +207,15 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
     _ = refreshFromAPI
     let date = Date()
     let settings = CodexSettingsStore().load()
-    let providerID = effectiveProviderID(configuration: configuration, settings: settings)
+    let snapshots = cachedSnapshots().filteringDisabledProviders(settings: settings)
+    let providerID = effectiveProviderID(configuration: configuration, settings: settings, snapshots: snapshots)
     return CodexUsageEntry(
       date: date,
       nextRefreshAt: settings.nextRefreshDate(after: date),
       providerID: providerID,
       snapshots: cachedSnapshot(
         providerID: providerID,
-        settings: settings,
+        snapshots: snapshots,
         openRouterKeyID: configuration.openRouterKeyID
       ).map { [$0] } ?? [],
       hideOpenRouterKeyUsage: !configuration.showsOpenRouterKeyUsageEffective,
@@ -224,13 +225,19 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
 
   private func effectiveProviderID(
     configuration: CodexWidgetConfigurationIntent,
-    settings: CodexMonitorSettings
+    settings: CodexMonitorSettings,
+    snapshots: [CodexUsageSnapshot]
   ) -> CodexUsageProviderID {
     let configuredProviderID = configuration.providerID
-    guard settings.enabledProviders.contains(configuredProviderID) else {
-      return settings.enabledProviders.first ?? configuredProviderID
+    if settings.enabledProviders.contains(configuredProviderID),
+      snapshots.contains(where: { $0.provider == configuredProviderID.rawValue })
+    {
+      return configuredProviderID
     }
-    return configuredProviderID
+    let providerWithCachedSnapshot = settings.enabledProviders.first { providerID in
+      snapshots.contains(where: { $0.provider == providerID.rawValue })
+    }
+    return providerWithCachedSnapshot ?? settings.enabledProviders.first ?? configuredProviderID
   }
 
   private func countdownEntries(from entry: CodexUsageEntry) -> [CodexUsageEntry] {
@@ -264,18 +271,16 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
 
   private func cachedSnapshot(
     providerID: CodexUsageProviderID,
-    settings: CodexMonitorSettings,
+    snapshots: [CodexUsageSnapshot],
     openRouterKeyID: String?
   ) -> CodexUsageSnapshot? {
-    let snapshots = cachedSnapshots()
-      .filteringDisabledProviders(settings: settings)
-      .filter { $0.provider == providerID.rawValue }
+    let providerSnapshots = snapshots.filter { $0.provider == providerID.rawValue }
     guard providerID == .openRouter, let openRouterKeyID else {
-      return snapshots.first
+      return providerSnapshots.first
     }
-    return snapshots.first { snapshot in
+    return providerSnapshots.first { snapshot in
       snapshot.openRouterWidgetKeyID == openRouterKeyID
-    } ?? snapshots.first
+    } ?? providerSnapshots.first
   }
 
   private func cachedSnapshots() -> [CodexUsageSnapshot] {
