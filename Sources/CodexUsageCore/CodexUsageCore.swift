@@ -107,11 +107,15 @@ public struct OpenRouterAPIKeyCredential: Codable, Equatable, Sendable, Identifi
 
 public extension Array where Element == CodexUsageSnapshot {
   func filteringDisabledProviders(settings: CodexMonitorSettings) -> [CodexUsageSnapshot] {
+    filteringProviders(settings.enabledProviders)
+  }
+
+  func filteringProviders(_ enabledProviders: [CodexUsageProviderID]) -> [CodexUsageSnapshot] {
     filter { snapshot in
       guard let provider = CodexUsageProviderID(rawValue: snapshot.provider) else {
         return false
       }
-      return settings.enabledProviders.contains(provider)
+      return enabledProviders.contains(provider)
     }
   }
 }
@@ -2136,11 +2140,15 @@ public final class CodexSettingsStore: @unchecked Sendable {
   }
 
   public func load() -> CodexMonitorSettings {
+    loadIfPresent() ?? CodexMonitorSettings()
+  }
+
+  public func loadIfPresent() -> CodexMonitorSettings? {
     guard fileManager.fileExists(atPath: settingsURL.path),
       let data = try? Data(contentsOf: settingsURL),
       let settings = try? JSONDecoder.codexMonitor.decode(CodexMonitorSettings.self, from: data)
     else {
-      return CodexMonitorSettings()
+      return nil
     }
     return CodexMonitorSettings(
       refreshIntervalMinutes: settings.refreshIntervalMinutes,

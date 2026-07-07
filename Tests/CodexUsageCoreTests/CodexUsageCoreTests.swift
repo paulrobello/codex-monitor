@@ -728,7 +728,7 @@ final class CodexUsageCoreTests: XCTestCase {
 
     XCTAssertTrue(widgetSource.contains("cachedSnapshot("))
     XCTAssertTrue(widgetSource.contains("openRouterKeyID: configuration.openRouterKeyID"))
-    XCTAssertTrue(widgetSource.contains("filteringDisabledProviders(settings: settings)"))
+    XCTAssertTrue(widgetSource.contains("let snapshots = allSnapshots.filteringProviders(enabledProviders)"))
   }
 
   func testWidgetFallsBackToEnabledProviderWhenDefaultProviderIsDisabled() throws {
@@ -743,11 +743,14 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(widgetSource.contains("let snapshots = cachedSnapshots().filteringDisabledProviders(settings: settings)"))
-    XCTAssertTrue(
-      widgetSource.contains(
-        "let providerID = effectiveProviderID(configuration: configuration, settings: settings, snapshots: snapshots)"
-      ))
+    XCTAssertTrue(widgetSource.contains("let allSnapshots = cachedSnapshots()"))
+    XCTAssertTrue(widgetSource.contains("let loadedSettings = CodexSettingsStore().loadIfPresent()"))
+    XCTAssertTrue(widgetSource.contains("let enabledProviders = loadedSettings?.enabledProviders ?? fallbackProviderIDs("))
+    XCTAssertTrue(widgetSource.contains("let snapshots = allSnapshots.filteringProviders(enabledProviders)"))
+    XCTAssertTrue(widgetSource.contains("let providerID = effectiveProviderID("))
+    XCTAssertTrue(widgetSource.contains("configuration: configuration,"))
+    XCTAssertTrue(widgetSource.contains("enabledProviders: enabledProviders,"))
+    XCTAssertTrue(widgetSource.contains("snapshots: allSnapshots"))
     XCTAssertTrue(widgetSource.contains("providerID: providerID"))
     XCTAssertTrue(widgetSource.contains("providerID: providerID,\n        snapshots: snapshots"))
     XCTAssertTrue(widgetSource.contains("private func effectiveProviderID("))
@@ -755,12 +758,14 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("return .openRouter"))
     XCTAssertTrue(widgetSource.contains("let configuredProviderID = configuration.providerID"))
     XCTAssertTrue(widgetSource.contains("if let configuredProviderID,"))
-    XCTAssertTrue(widgetSource.contains("settings.enabledProviders.contains(configuredProviderID)"))
-    XCTAssertTrue(widgetSource.contains("snapshots.contains(where: { $0.provider == configuredProviderID.rawValue })"))
-    XCTAssertTrue(widgetSource.contains("let providerWithCachedSnapshot = settings.enabledProviders.first { providerID in"))
+    XCTAssertTrue(widgetSource.contains("enabledProviders.contains(configuredProviderID)"))
+    XCTAssertTrue(widgetSource.contains("return configuredProviderID"))
+    XCTAssertTrue(widgetSource.contains("private func fallbackProviderIDs("))
+    XCTAssertTrue(widgetSource.contains("appendProvider(.openRouter, to: &providers)"))
+    XCTAssertTrue(widgetSource.contains("let providerWithCachedSnapshot = enabledProviders.first { providerID in"))
     XCTAssertTrue(widgetSource.contains("snapshots.contains(where: { $0.provider == providerID.rawValue })"))
     XCTAssertTrue(
-      widgetSource.contains("return providerWithCachedSnapshot ?? settings.enabledProviders.first ?? configuredProviderID ?? .openRouter"))
+      widgetSource.contains("return providerWithCachedSnapshot ?? enabledProviders.first ?? configuredProviderID ?? .openRouter"))
   }
 
   func testIOSWidgetProviderPickerExcludesClaudeCode() throws {
@@ -775,7 +780,7 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(widgetSource.contains("#if os(macOS)\n  case claudeCode\n  #endif"))
+    XCTAssertTrue(widgetSource.contains("#if os(macOS)\n  case claudeCode = \"claude-code\"\n  #endif"))
     XCTAssertTrue(
       widgetSource.contains(
         "#if os(macOS)\n  static let caseDisplayRepresentations: [CodexWidgetProviderChoice: DisplayRepresentation] = ["
@@ -972,6 +977,9 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("@Parameter(title: \"Show Key Usage\", default: true)"))
     XCTAssertTrue(widgetSource.contains("@Parameter(title: \"Show Credits\", default: true)"))
     XCTAssertTrue(widgetSource.contains("@Parameter(title: \"OpenRouter Key\")"))
+    XCTAssertTrue(widgetSource.contains("case openAICodex = \"openai-codex\""))
+    XCTAssertTrue(widgetSource.contains("case openRouter = \"openrouter\""))
+    XCTAssertTrue(widgetSource.contains("case claudeCode = \"claude-code\""))
     XCTAssertTrue(widgetSource.contains("self.provider = nil"))
     XCTAssertFalse(widgetSource.contains("self.provider = .openAICodex"))
     XCTAssertTrue(widgetSource.contains("var providerID: CodexUsageProviderID?"))
@@ -1292,7 +1300,7 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 5"))
+    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 6"))
   }
 
   func testKeychainStoresCanOmitAccessGroupForUnprovisionedCLI() throws {
@@ -1322,6 +1330,17 @@ final class CodexUsageCoreTests: XCTestCase {
 
     XCTAssertEqual(store.load().refreshIntervalMinutes, 60)
     XCTAssertEqual(store.load().enabledProviders, [.openAICodex, .openRouter])
+    XCTAssertEqual(store.loadIfPresent()?.enabledProviders, [.openAICodex, .openRouter])
+  }
+
+  func testSettingsStoreCanReportMissingSettingsWithoutDefaultingToCodex() throws {
+    let url = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+      .appendingPathComponent("missing-settings.json")
+    let store = CodexSettingsStore(settingsURL: url)
+
+    XCTAssertNil(store.loadIfPresent())
+    XCTAssertEqual(store.load().enabledProviders, [.openAICodex])
   }
 
   func testParsesOpenRouterKeyLimitAndCredits() throws {
