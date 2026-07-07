@@ -44,7 +44,7 @@ make launch-phone PHONE_DEVICE="Your Device Name"  # Target a different device
 - **Usage Windows** — Shows 5-hour and weekly Codex usage windows with remaining quota percentages
 - **Reset Countdowns** — Displays reset date/time plus time remaining until quota resets
 - **Progress Bars** — Visual indicators for usage consumption across all providers
-- **WidgetKit Widgets** — Home-screen widgets (macOS and iOS) with cached usage and timeline refresh
+- **WidgetKit Widgets** — Home-screen widgets (macOS and iOS) with cached usage, timeline refresh, and compact percentage summaries in the smallest size
 - **Auto-Refresh** — Configurable intervals: 5, 15, 30, or 60 minutes
 - **Secure Auth** — OAuth credentials stored in Keychain, not in plain-text files
 - **macOS Menu Bar** — Lives in the menu bar with a dynamic gauge icon showing usage at a glance
@@ -109,6 +109,11 @@ API key lookup order:
 2. Labeled Keychain entries (`OpenRouterAPIKeyStore`)
 
 Each stored OpenRouter key has a custom label. When OpenRouter is enabled, Codex Monitor fetches one labeled usage snapshot per key.
+
+OpenRouter widgets can be configured for a specific saved key. In the smallest
+widget size, the header keeps the provider label as `OpenRouter`, shows the key
+label as a smaller subheader, and displays compact `Usage` and `Credits`
+percent remaining rows.
 
 ### Claude Code
 

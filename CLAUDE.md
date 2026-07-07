@@ -40,7 +40,7 @@ Helper script: `script/build_and_run.sh` — kills existing app, installs, then 
 
 - **`Sources/CodexMonitoriOS/`** — iOS app (SwiftUI): device-code login UI, `NavigationStack` + `List` layout, monitors `scenePhase` to resume pending logins.
 
-- **`Sources/CodexMonitorWidget/`** — Shared WidgetKit extension: timeline provider reads the shared cache, filters it by enabled provider settings, adapts layout per `widgetFamily`.
+- **`Sources/CodexMonitorWidget/`** — Shared WidgetKit extension: timeline provider reads the shared cache, filters it by enabled provider settings, adapts layout per `widgetFamily`. The smallest widget uses a compact summary; OpenRouter keeps the provider label as `OpenRouter`, shows the selected key label as a subheader, and renders `Usage` / `Credits` percent remaining rows.
 
 - **`Sources/CodexUsageCLI/main.swift`** — macOS CLI (`codex-usage`): commands `login`, `refresh`, `print`, `cache-path`, `clear-auth`, `interval`.
 
