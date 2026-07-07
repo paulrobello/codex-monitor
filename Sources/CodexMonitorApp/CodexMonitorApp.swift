@@ -49,6 +49,7 @@ struct CodexMonitorApp: App {
             snapshot: snapshot,
             compact: true,
             showProviderName: true,
+            hideOpenRouterKeyUsage: store.settings.hideOpenRouterKeyUsage,
             hideOpenRouterCredits: store.settings.hideOpenRouterCredits
           )
         }
@@ -305,6 +306,7 @@ final class UsageStore: ObservableObject {
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
       hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
@@ -326,6 +328,7 @@ final class UsageStore: ObservableObject {
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
       hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
@@ -342,6 +345,7 @@ final class UsageStore: ObservableObject {
       beaconAPIEnabled: enabled,
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
       hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
@@ -354,6 +358,7 @@ final class UsageStore: ObservableObject {
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: port,
       beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
       hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
@@ -368,19 +373,39 @@ final class UsageStore: ObservableObject {
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: providerColors,
+      hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
       hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
   }
 
-  func setHideOpenRouterCredits(_ hidden: Bool) {
+  func setOpenRouterKeyUsageVisible(_ visible: Bool) {
+    let hideKeyUsage = !visible
+    let hideCredits = hideKeyUsage && settings.hideOpenRouterCredits ? false : settings.hideOpenRouterCredits
     let nextSettings = CodexMonitorSettings(
       refreshIntervalMinutes: settings.refreshIntervalMinutes,
       enabledProviders: settings.enabledProviders,
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
-      hideOpenRouterCredits: hidden
+      hideOpenRouterKeyUsage: hideKeyUsage,
+      hideOpenRouterCredits: hideCredits
+    )
+    saveSettingsAndApplyBeaconAPI(nextSettings)
+    WidgetCenter.shared.reloadAllTimelines()
+  }
+
+  func setOpenRouterCreditsVisible(_ visible: Bool) {
+    let hideCredits = !visible
+    let hideKeyUsage = hideCredits && settings.hideOpenRouterKeyUsage ? false : settings.hideOpenRouterKeyUsage
+    let nextSettings = CodexMonitorSettings(
+      refreshIntervalMinutes: settings.refreshIntervalMinutes,
+      enabledProviders: settings.enabledProviders,
+      beaconAPIEnabled: settings.beaconAPIEnabled,
+      beaconAPIPort: settings.beaconAPIPort,
+      beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterKeyUsage: hideKeyUsage,
+      hideOpenRouterCredits: hideCredits
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
     WidgetCenter.shared.reloadAllTimelines()
@@ -630,6 +655,7 @@ struct ContentView: View {
           UsageSummaryView(
             snapshot: snapshot,
             showProviderName: true,
+            hideOpenRouterKeyUsage: store.settings.hideOpenRouterKeyUsage,
             hideOpenRouterCredits: store.settings.hideOpenRouterCredits
           )
         }
@@ -739,7 +765,10 @@ struct SettingsView: View {
             }
           }
         }
-        Toggle("Hide OpenRouter Credits", isOn: hideOpenRouterCreditsBinding)
+        Toggle("Show OpenRouter Key Usage", isOn: openRouterKeyUsageBinding)
+          .disabled(!store.settings.hideOpenRouterKeyUsage && store.settings.hideOpenRouterCredits)
+        Toggle("Show OpenRouter Credits", isOn: openRouterCreditsBinding)
+          .disabled(store.settings.hideOpenRouterKeyUsage && !store.settings.hideOpenRouterCredits)
         Divider()
         VStack(alignment: .leading, spacing: 6) {
           Text("Add OpenRouter API Key")
@@ -829,10 +858,17 @@ struct SettingsView: View {
     )
   }
 
-  private var hideOpenRouterCreditsBinding: Binding<Bool> {
+  private var openRouterKeyUsageBinding: Binding<Bool> {
     Binding(
-      get: { store.settings.hideOpenRouterCredits },
-      set: { store.setHideOpenRouterCredits($0) }
+      get: { !store.settings.hideOpenRouterKeyUsage },
+      set: { store.setOpenRouterKeyUsageVisible($0) }
+    )
+  }
+
+  private var openRouterCreditsBinding: Binding<Bool> {
+    Binding(
+      get: { !store.settings.hideOpenRouterCredits },
+      set: { store.setOpenRouterCreditsVisible($0) }
     )
   }
 
@@ -906,6 +942,7 @@ struct UsageSummaryView: View {
   var snapshot: CodexUsageSnapshot
   var compact = false
   var showProviderName = false
+  var hideOpenRouterKeyUsage = false
   var hideOpenRouterCredits = false
 
   var body: some View {
@@ -914,7 +951,7 @@ struct UsageSummaryView: View {
         Text(snapshot.displayName)
           .font(compact ? .subheadline.weight(.semibold) : .headline.weight(.semibold))
       }
-      if let fiveHour = snapshot.fiveHour {
+      if let fiveHour = visibleFiveHourWindow {
         UsageWindowView(
           window: fiveHour, tint: color(for: fiveHour.remainingPercent), compact: compact)
       }
@@ -924,11 +961,24 @@ struct UsageSummaryView: View {
     }
   }
 
+  private var visibleFiveHourWindow: CodexUsageWindow? {
+    guard !isOpenRouterKeyUsageWindow else {
+      return nil
+    }
+    return snapshot.fiveHour
+  }
+
   private var visibleWeeklyWindow: CodexUsageWindow? {
     guard !isOpenRouterCreditsWindow else {
       return nil
     }
     return snapshot.weekly
+  }
+
+  private var isOpenRouterKeyUsageWindow: Bool {
+    hideOpenRouterKeyUsage
+      && snapshot.provider == CodexUsageProviderID.openRouter.rawValue
+      && snapshot.fiveHour?.label == "Key limit"
   }
 
   private var isOpenRouterCreditsWindow: Bool {

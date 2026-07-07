@@ -8,6 +8,7 @@ struct CodexUsageEntry: TimelineEntry {
   let nextRefreshAt: Date
   let providerID: CodexUsageProviderID
   let snapshots: [CodexUsageSnapshot]
+  let hideOpenRouterKeyUsage: Bool
   let hideOpenRouterCredits: Bool
 }
 
@@ -46,6 +47,46 @@ enum CodexWidgetProviderChoice: String, AppEnum {
   }
 }
 
+struct OpenRouterWidgetKeyChoice: AppEntity {
+  static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "OpenRouter Key")
+  static let defaultQuery = OpenRouterWidgetKeyQuery()
+
+  let id: String
+  let label: String
+
+  var displayRepresentation: DisplayRepresentation {
+    DisplayRepresentation(title: "\(label)")
+  }
+}
+
+struct OpenRouterWidgetKeyQuery: EntityQuery {
+  func entities(for identifiers: [OpenRouterWidgetKeyChoice.ID]) async throws
+    -> [OpenRouterWidgetKeyChoice]
+  {
+    let requested = Set(identifiers)
+    return openRouterKeyChoices().filter { requested.contains($0.id) }
+  }
+
+  func suggestedEntities() async throws -> [OpenRouterWidgetKeyChoice] {
+    openRouterKeyChoices()
+  }
+
+  private func openRouterKeyChoices() -> [OpenRouterWidgetKeyChoice] {
+    let snapshots = (try? CodexUsageCache().loadSnapshots()) ?? []
+    var seenIDs = Set<String>()
+    return snapshots.compactMap { snapshot in
+      guard snapshot.provider == CodexUsageProviderID.openRouter.rawValue else {
+        return nil
+      }
+      let id = snapshot.openRouterWidgetKeyID
+      guard seenIDs.insert(id).inserted else {
+        return nil
+      }
+      return OpenRouterWidgetKeyChoice(id: id, label: snapshot.openRouterWidgetKeyLabel)
+    }
+  }
+}
+
 struct CodexWidgetConfigurationIntent: WidgetConfigurationIntent {
   static let title: LocalizedStringResource = "Provider"
   static let description = IntentDescription("Choose which usage provider this widget displays.")
@@ -53,16 +94,51 @@ struct CodexWidgetConfigurationIntent: WidgetConfigurationIntent {
   @Parameter(title: "Provider")
   var provider: CodexWidgetProviderChoice?
 
+  @Parameter(title: "Show Key Usage")
+  var showsOpenRouterKeyUsage: Bool?
+
+  @Parameter(title: "Show Credits")
+  var showsOpenRouterCredits: Bool?
+
+  @Parameter(title: "OpenRouter Key")
+  var openRouterKey: OpenRouterWidgetKeyChoice?
+
   init() {
     self.provider = .openAICodex
+    self.showsOpenRouterKeyUsage = true
+    self.showsOpenRouterCredits = true
+    self.openRouterKey = nil
   }
 
   init(provider: CodexWidgetProviderChoice) {
     self.provider = provider
+    self.showsOpenRouterKeyUsage = true
+    self.showsOpenRouterCredits = true
+    self.openRouterKey = nil
   }
 
   var providerID: CodexUsageProviderID {
     provider?.providerID ?? .openAICodex
+  }
+
+  var openRouterKeyID: String? {
+    openRouterKey?.id
+  }
+
+  var showsOpenRouterKeyUsageEffective: Bool {
+    rawShowsOpenRouterKeyUsage || (!rawShowsOpenRouterKeyUsage && !rawShowsOpenRouterCredits)
+  }
+
+  var showsOpenRouterCreditsEffective: Bool {
+    rawShowsOpenRouterCredits
+  }
+
+  private var rawShowsOpenRouterKeyUsage: Bool {
+    showsOpenRouterKeyUsage ?? true
+  }
+
+  private var rawShowsOpenRouterCredits: Bool {
+    showsOpenRouterCredits ?? true
   }
 }
 
@@ -83,6 +159,7 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
             label: "wk", remainingPercent: 48, resetAt: Date().addingTimeInterval(172800))
         )
       ],
+      hideOpenRouterKeyUsage: false,
       hideOpenRouterCredits: false
     )
   }
@@ -110,8 +187,13 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
       date: date,
       nextRefreshAt: settings.nextRefreshDate(after: date),
       providerID: configuration.providerID,
-      snapshots: cachedSnapshot(providerID: configuration.providerID, settings: settings).map { [$0] } ?? [],
-      hideOpenRouterCredits: settings.hideOpenRouterCredits
+      snapshots: cachedSnapshot(
+        providerID: configuration.providerID,
+        settings: settings,
+        openRouterKeyID: configuration.openRouterKeyID
+      ).map { [$0] } ?? [],
+      hideOpenRouterKeyUsage: !configuration.showsOpenRouterKeyUsageEffective,
+      hideOpenRouterCredits: !configuration.showsOpenRouterCreditsEffective
     )
   }
 
@@ -139,17 +221,25 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
       nextRefreshAt: entry.nextRefreshAt,
       providerID: entry.providerID,
       snapshots: entry.snapshots,
+      hideOpenRouterKeyUsage: entry.hideOpenRouterKeyUsage,
       hideOpenRouterCredits: entry.hideOpenRouterCredits
     )
   }
 
   private func cachedSnapshot(
     providerID: CodexUsageProviderID,
-    settings: CodexMonitorSettings
+    settings: CodexMonitorSettings,
+    openRouterKeyID: String?
   ) -> CodexUsageSnapshot? {
-    cachedSnapshots()
+    let snapshots = cachedSnapshots()
       .filteringDisabledProviders(settings: settings)
-      .first { $0.provider == providerID.rawValue }
+      .filter { $0.provider == providerID.rawValue }
+    guard providerID == .openRouter, let openRouterKeyID else {
+      return snapshots.first
+    }
+    return snapshots.first { snapshot in
+      snapshot.openRouterWidgetKeyID == openRouterKeyID
+    } ?? snapshots.first
   }
 
   private func cachedSnapshots() -> [CodexUsageSnapshot] {
@@ -182,7 +272,7 @@ struct CodexMonitorWidgetView: View {
       }
 
       if let snapshot = entry.snapshots.first {
-        if let fiveHour = snapshot.fiveHour {
+        if let fiveHour = visibleFiveHourWindow(for: snapshot) {
           WidgetUsageRow(window: fiveHour)
         }
         if family != .systemSmall, let weekly = visibleWeeklyWindow(for: snapshot) {
@@ -201,11 +291,24 @@ struct CodexMonitorWidgetView: View {
     .containerBackground(.background, for: .widget)
   }
 
+  private func visibleFiveHourWindow(for snapshot: CodexUsageSnapshot) -> CodexUsageWindow? {
+    guard !isOpenRouterKeyUsageWindow(snapshot) else {
+      return nil
+    }
+    return snapshot.fiveHour
+  }
+
   private func visibleWeeklyWindow(for snapshot: CodexUsageSnapshot) -> CodexUsageWindow? {
     guard !isOpenRouterCreditsWindow(snapshot) else {
       return nil
     }
     return snapshot.weekly
+  }
+
+  private func isOpenRouterKeyUsageWindow(_ snapshot: CodexUsageSnapshot) -> Bool {
+    entry.hideOpenRouterKeyUsage
+      && snapshot.provider == CodexUsageProviderID.openRouter.rawValue
+      && snapshot.fiveHour?.label == "Key limit"
   }
 
   private func isOpenRouterCreditsWindow(_ snapshot: CodexUsageSnapshot) -> Bool {
@@ -240,6 +343,23 @@ struct CodexMonitorWidgetView: View {
     return "in \(hours)h \(minutes)m"
   }
 
+}
+
+private extension CodexUsageSnapshot {
+  var openRouterWidgetKeyID: String {
+    nonEmpty(accountID) ?? nonEmpty(accountLabel) ?? instanceID
+  }
+
+  var openRouterWidgetKeyLabel: String {
+    nonEmpty(accountLabel) ?? displayName
+  }
+
+  private func nonEmpty(_ value: String?) -> String? {
+    guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+      return nil
+    }
+    return trimmed
+  }
 }
 
 struct WidgetUsageRow: View {

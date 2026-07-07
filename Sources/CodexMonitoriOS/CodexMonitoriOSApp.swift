@@ -179,6 +179,7 @@ final class iOSUsageStore: ObservableObject {
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
       hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
     do {
@@ -208,6 +209,7 @@ final class iOSUsageStore: ObservableObject {
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
       hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
     do {
@@ -231,6 +233,7 @@ final class iOSUsageStore: ObservableObject {
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
       hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
   }

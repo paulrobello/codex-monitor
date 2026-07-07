@@ -54,6 +54,7 @@ struct CodexUsageCLI {
             beaconAPIEnabled: currentSettings.beaconAPIEnabled,
             beaconAPIPort: currentSettings.beaconAPIPort,
             beaconProviderColors: currentSettings.beaconProviderColors,
+            hideOpenRouterKeyUsage: currentSettings.hideOpenRouterKeyUsage,
             hideOpenRouterCredits: currentSettings.hideOpenRouterCredits
           )
           try settingsStore.save(settings)
@@ -83,6 +84,7 @@ struct CodexUsageCLI {
             beaconAPIEnabled: settings.beaconAPIEnabled,
             beaconAPIPort: settings.beaconAPIPort,
             beaconProviderColors: settings.beaconProviderColors,
+            hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
             hideOpenRouterCredits: settings.hideOpenRouterCredits
           )
           try settingsStore.save(nextSettings)
@@ -101,6 +103,7 @@ struct CodexUsageCLI {
             beaconAPIEnabled: enabled,
             beaconAPIPort: settings.beaconAPIPort,
             beaconProviderColors: settings.beaconProviderColors,
+            hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
             hideOpenRouterCredits: settings.hideOpenRouterCredits
           )
           try settingsStore.save(nextSettings)

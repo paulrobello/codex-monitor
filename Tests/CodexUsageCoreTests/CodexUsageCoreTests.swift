@@ -122,6 +122,7 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertFalse(settings.beaconAPIEnabled)
     XCTAssertEqual(settings.beaconAPIPort, 8765)
     XCTAssertEqual(settings.refreshIntervalMinutes, 15)
+    XCTAssertFalse(settings.hideOpenRouterKeyUsage)
     XCTAssertFalse(settings.hideOpenRouterCredits)
   }
 
@@ -154,6 +155,23 @@ final class CodexUsageCoreTests: XCTestCase {
     let decoded = try JSONDecoder.codexMonitor.decode(CodexMonitorSettings.self, from: data)
 
     XCTAssertTrue(decoded.hideOpenRouterCredits)
+  }
+
+  func testMonitorSettingsPersistOpenRouterKeyUsageVisibility() throws {
+    let settings = CodexMonitorSettings(hideOpenRouterKeyUsage: true)
+
+    let data = try JSONEncoder.codexMonitor.encode(settings)
+    let decoded = try JSONDecoder.codexMonitor.decode(CodexMonitorSettings.self, from: data)
+
+    XCTAssertTrue(decoded.hideOpenRouterKeyUsage)
+    XCTAssertFalse(decoded.hideOpenRouterCredits)
+  }
+
+  func testMonitorSettingsKeepAtLeastOneOpenRouterUsageRowVisible() throws {
+    let settings = CodexMonitorSettings(hideOpenRouterKeyUsage: true, hideOpenRouterCredits: true)
+
+    XCTAssertFalse(settings.hideOpenRouterKeyUsage)
+    XCTAssertTrue(settings.hideOpenRouterCredits)
   }
 
   func testSnapshotsFilterToEnabledProviders() {
@@ -688,7 +706,8 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(widgetSource.contains("cachedSnapshot(providerID: configuration.providerID, settings: settings)"))
+    XCTAssertTrue(widgetSource.contains("cachedSnapshot("))
+    XCTAssertTrue(widgetSource.contains("openRouterKeyID: configuration.openRouterKeyID"))
     XCTAssertTrue(widgetSource.contains("CodexUsageCache().loadSnapshots()"))
     XCTAssertFalse(widgetSource.contains("fetchAndCacheSnapshot"))
     XCTAssertFalse(widgetSource.contains("UsageProviderClient().fetchUsage"))
@@ -708,7 +727,8 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(widgetSource.contains("cachedSnapshot(providerID: configuration.providerID, settings: settings)"))
+    XCTAssertTrue(widgetSource.contains("cachedSnapshot("))
+    XCTAssertTrue(widgetSource.contains("openRouterKeyID: configuration.openRouterKeyID"))
     XCTAssertTrue(widgetSource.contains("filteringDisabledProviders(settings: settings)"))
   }
 
@@ -804,9 +824,12 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(appSource.contains("Button(\"Save Label\")"))
     XCTAssertTrue(appSource.contains("Button(\"Add Key\")"))
     XCTAssertTrue(appSource.contains("renameOpenRouterAPIKey"))
-    XCTAssertTrue(appSource.contains("Toggle(\"Hide OpenRouter Credits\""))
-    XCTAssertTrue(appSource.contains("hideOpenRouterCreditsBinding"))
-    XCTAssertTrue(appSource.contains("setHideOpenRouterCredits"))
+    XCTAssertTrue(appSource.contains("Toggle(\"Show OpenRouter Key Usage\""))
+    XCTAssertTrue(appSource.contains("Toggle(\"Show OpenRouter Credits\""))
+    XCTAssertTrue(appSource.contains("openRouterKeyUsageBinding"))
+    XCTAssertTrue(appSource.contains("openRouterCreditsBinding"))
+    XCTAssertTrue(appSource.contains("setOpenRouterKeyUsageVisible"))
+    XCTAssertTrue(appSource.contains("setOpenRouterCreditsVisible"))
     XCTAssertFalse(appSource.contains("beaconHTTPServer"))
     XCTAssertFalse(appSource.contains("startBeaconServerIfNeeded"))
   }
@@ -898,8 +921,24 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("private var showsProgressBar: Bool"))
     XCTAssertTrue(widgetSource.contains("window.valueText == nil || window.label.hasSuffix(\"limit\")"))
     XCTAssertTrue(widgetSource.contains("if showsProgressBar {"))
+    XCTAssertTrue(widgetSource.contains("@Parameter(title: \"Show Key Usage\")"))
+    XCTAssertTrue(widgetSource.contains("@Parameter(title: \"Show Credits\")"))
+    XCTAssertTrue(widgetSource.contains("@Parameter(title: \"OpenRouter Key\")"))
+    XCTAssertTrue(widgetSource.contains("var showsOpenRouterKeyUsage: Bool?"))
+    XCTAssertTrue(widgetSource.contains("var showsOpenRouterCredits: Bool?"))
+    XCTAssertTrue(widgetSource.contains("var openRouterKey: OpenRouterWidgetKeyChoice?"))
+    XCTAssertTrue(widgetSource.contains("struct OpenRouterWidgetKeyChoice: AppEntity"))
+    XCTAssertTrue(widgetSource.contains("struct OpenRouterWidgetKeyQuery: EntityQuery"))
+    XCTAssertTrue(widgetSource.contains("var openRouterKeyID: String?"))
+    XCTAssertTrue(widgetSource.contains("var showsOpenRouterKeyUsageEffective: Bool"))
+    XCTAssertTrue(widgetSource.contains("var showsOpenRouterCreditsEffective: Bool"))
+    XCTAssertTrue(widgetSource.contains("let hideOpenRouterKeyUsage: Bool"))
     XCTAssertTrue(widgetSource.contains("let hideOpenRouterCredits: Bool"))
-    XCTAssertTrue(widgetSource.contains("hideOpenRouterCredits: settings.hideOpenRouterCredits"))
+    XCTAssertTrue(widgetSource.contains("hideOpenRouterKeyUsage: !configuration.showsOpenRouterKeyUsageEffective"))
+    XCTAssertTrue(widgetSource.contains("hideOpenRouterCredits: !configuration.showsOpenRouterCreditsEffective"))
+    XCTAssertTrue(widgetSource.contains("cachedSnapshot("))
+    XCTAssertTrue(widgetSource.contains("openRouterKeyID: configuration.openRouterKeyID"))
+    XCTAssertTrue(widgetSource.contains("snapshot.openRouterWidgetKeyID == openRouterKeyID"))
     XCTAssertTrue(widgetSource.contains("private func visibleWeeklyWindow(for snapshot: CodexUsageSnapshot)"))
     XCTAssertFalse(widgetSource.contains("ProgressView(value: window.remainingPercent, total: 100)"))
 
@@ -940,9 +979,13 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
+    XCTAssertTrue(appSource.contains("hideOpenRouterKeyUsage: store.settings.hideOpenRouterKeyUsage"))
     XCTAssertTrue(appSource.contains("hideOpenRouterCredits: store.settings.hideOpenRouterCredits"))
+    XCTAssertTrue(appSource.contains("private var visibleFiveHourWindow: CodexUsageWindow?"))
     XCTAssertTrue(appSource.contains("private var visibleWeeklyWindow: CodexUsageWindow?"))
+    XCTAssertTrue(appSource.contains("private var isOpenRouterKeyUsageWindow: Bool"))
     XCTAssertTrue(appSource.contains("private var isOpenRouterCreditsWindow: Bool"))
+    XCTAssertTrue(appSource.contains("if let fiveHour = visibleFiveHourWindow"))
     XCTAssertTrue(appSource.contains("if let weekly = visibleWeeklyWindow"))
   }
 
