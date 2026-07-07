@@ -156,13 +156,9 @@ struct CodexWidgetConfigurationIntent: WidgetConfigurationIntent {
   static let title: LocalizedStringResource = "Provider"
   static let description = IntentDescription("Choose which usage provider this widget displays.")
   static var parameterSummary: some ParameterSummary {
-    When(\.$provider, .equalTo, .openRouter) {
-      Summary(
-        "Show \(\.$provider) key \(\.$openRouterKey) usage \(\.$showsOpenRouterKeyUsage) credits \(\.$showsOpenRouterCredits)"
-      )
-    } otherwise: {
-      Summary("Show \(\.$provider)")
-    }
+    Summary(
+      "Show \(\.$provider) key \(\.$openRouterKey) usage \(\.$showsOpenRouterKeyUsage) credits \(\.$showsOpenRouterCredits)"
+    )
   }
 
   @Parameter(title: "Provider")

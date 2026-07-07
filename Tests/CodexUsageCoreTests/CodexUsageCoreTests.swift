@@ -999,7 +999,7 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("@Parameter(title: \"Show Credits\", default: true)"))
     XCTAssertTrue(widgetSource.contains("@Parameter(title: \"OpenRouter Key\")"))
     XCTAssertTrue(widgetSource.contains("static var parameterSummary: some ParameterSummary"))
-    XCTAssertTrue(widgetSource.contains("When(\\.$provider, .equalTo, .openRouter)"))
+    XCTAssertFalse(widgetSource.contains("When(\\.$provider, .equalTo, .openRouter)"))
     XCTAssertTrue(
       widgetSource.contains(
         "\"Show \\(\\.$provider) key \\(\\.$openRouterKey) usage \\(\\.$showsOpenRouterKeyUsage) credits \\(\\.$showsOpenRouterCredits)\""
@@ -1349,7 +1349,7 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 14"))
+    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 15"))
   }
 
   func testKeychainStoresCanOmitAccessGroupForUnprovisionedCLI() throws {
