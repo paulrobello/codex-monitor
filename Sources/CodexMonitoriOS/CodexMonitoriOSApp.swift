@@ -683,10 +683,14 @@ struct iOSUsageSummaryView: View {
       }
 
       if let fiveHour = visibleFiveHourWindow {
-        iOSUsageWindowView(window: fiveHour)
+        iOSUsageWindowView(
+          window: fiveHour,
+          forcePercentDisplay: snapshot.provider == CodexUsageProviderID.claudeCode.rawValue)
       }
       if let weekly = visibleWeeklyWindow {
-        iOSUsageWindowView(window: weekly)
+        iOSUsageWindowView(
+          window: weekly,
+          forcePercentDisplay: snapshot.provider == CodexUsageProviderID.claudeCode.rawValue)
       }
     }
     .padding(.vertical, 4)
@@ -726,6 +730,7 @@ struct iOSUsageSummaryView: View {
 
 struct iOSUsageWindowView: View {
   var window: CodexUsageWindow
+  var forcePercentDisplay = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
@@ -733,7 +738,7 @@ struct iOSUsageWindowView: View {
         Text(displayLabel)
           .font(.headline)
         Spacer()
-        Text(window.valueText ?? "\(Int(window.remainingPercent.rounded()))%")
+        Text(displayValueText)
           .font(.system(.title3, design: .rounded).weight(.semibold))
           .foregroundStyle(tint)
       }
@@ -756,8 +761,15 @@ struct iOSUsageWindowView: View {
     return .green
   }
 
+  private var displayValueText: String {
+    if forcePercentDisplay {
+      return "\(Int(window.remainingPercent.rounded()))%"
+    }
+    return window.valueText ?? "\(Int(window.remainingPercent.rounded()))%"
+  }
+
   private var showsProgressBar: Bool {
-    window.valueText == nil || window.label.hasSuffix("limit")
+    forcePercentDisplay || window.valueText == nil || window.label.hasSuffix("limit")
   }
 
   private var resetText: String {

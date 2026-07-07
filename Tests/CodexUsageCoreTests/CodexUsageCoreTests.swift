@@ -929,8 +929,15 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains(".font(.system(size: 11, weight: .semibold, design: .rounded))"))
     XCTAssertTrue(widgetSource.contains(".frame(height: 5)"))
     XCTAssertTrue(widgetSource.contains("private var showsProgressBar: Bool"))
-    XCTAssertTrue(widgetSource.contains("window.valueText == nil || window.label.hasSuffix(\"limit\")"))
+    XCTAssertTrue(
+      widgetSource.contains(
+        "forcePercentDisplay || window.valueText == nil || window.label.hasSuffix(\"limit\")"))
     XCTAssertTrue(widgetSource.contains("if showsProgressBar {"))
+    XCTAssertTrue(
+      widgetSource.contains(
+        "forcePercentDisplay: snapshot.provider == CodexUsageProviderID.claudeCode.rawValue"))
+    XCTAssertTrue(widgetSource.contains("var forcePercentDisplay = false"))
+    XCTAssertTrue(widgetSource.contains("if !forcePercentDisplay, let valueText = window.valueText"))
     XCTAssertTrue(widgetSource.contains("@Parameter(title: \"Show Key Usage\")"))
     XCTAssertTrue(widgetSource.contains("@Parameter(title: \"Show Credits\")"))
     XCTAssertTrue(widgetSource.contains("@Parameter(title: \"OpenRouter Key\")"))
@@ -974,8 +981,16 @@ final class CodexUsageCoreTests: XCTestCase {
     for appSource in appSources {
       let source = try String(contentsOf: appSource, encoding: .utf8)
       XCTAssertTrue(source.contains("private var showsProgressBar: Bool"))
-      XCTAssertTrue(source.contains("window.valueText == nil || window.label.hasSuffix(\"limit\")"))
+      XCTAssertTrue(
+        source.contains(
+          "forcePercentDisplay || window.valueText == nil || window.label.hasSuffix(\"limit\")"))
       XCTAssertTrue(source.contains("if showsProgressBar {"))
+      XCTAssertTrue(
+        source.contains(
+          "forcePercentDisplay: snapshot.provider == CodexUsageProviderID.claudeCode.rawValue"))
+      XCTAssertTrue(source.contains("var forcePercentDisplay = false"))
+      XCTAssertTrue(source.contains("private var displayValueText: String"))
+      XCTAssertTrue(source.contains("Text(displayValueText)"))
     }
   }
 

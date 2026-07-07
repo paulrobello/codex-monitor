@@ -273,10 +273,14 @@ struct CodexMonitorWidgetView: View {
 
       if let snapshot = entry.snapshots.first {
         if let fiveHour = visibleFiveHourWindow(for: snapshot) {
-          WidgetUsageRow(window: fiveHour)
+          WidgetUsageRow(
+            window: fiveHour,
+            forcePercentDisplay: snapshot.provider == CodexUsageProviderID.claudeCode.rawValue)
         }
         if family != .systemSmall, let weekly = visibleWeeklyWindow(for: snapshot) {
-          WidgetUsageRow(window: weekly)
+          WidgetUsageRow(
+            window: weekly,
+            forcePercentDisplay: snapshot.provider == CodexUsageProviderID.claudeCode.rawValue)
         }
       } else {
         Spacer()
@@ -368,6 +372,7 @@ private extension CodexUsageSnapshot {
 
 struct WidgetUsageRow: View {
   var window: CodexUsageWindow
+  var forcePercentDisplay = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 2) {
@@ -401,7 +406,7 @@ struct WidgetUsageRow: View {
   }
 
   private var showsProgressBar: Bool {
-    window.valueText == nil || window.label.hasSuffix("limit")
+    forcePercentDisplay || window.valueText == nil || window.label.hasSuffix("limit")
   }
 
   private var resetText: String {
@@ -426,7 +431,7 @@ struct WidgetUsageRow: View {
 
   private var remainingLabel: some View {
     HStack(alignment: .firstTextBaseline, spacing: 2) {
-      if let valueText = window.valueText {
+      if !forcePercentDisplay, let valueText = window.valueText {
         Text(valueText)
           .monospacedDigit()
       } else {

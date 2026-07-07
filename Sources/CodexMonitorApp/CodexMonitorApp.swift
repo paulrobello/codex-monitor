@@ -953,10 +953,17 @@ struct UsageSummaryView: View {
       }
       if let fiveHour = visibleFiveHourWindow {
         UsageWindowView(
-          window: fiveHour, tint: color(for: fiveHour.remainingPercent), compact: compact)
+          window: fiveHour,
+          tint: color(for: fiveHour.remainingPercent),
+          compact: compact,
+          forcePercentDisplay: snapshot.provider == CodexUsageProviderID.claudeCode.rawValue)
       }
       if let weekly = visibleWeeklyWindow {
-        UsageWindowView(window: weekly, tint: color(for: weekly.remainingPercent), compact: compact)
+        UsageWindowView(
+          window: weekly,
+          tint: color(for: weekly.remainingPercent),
+          compact: compact,
+          forcePercentDisplay: snapshot.provider == CodexUsageProviderID.claudeCode.rawValue)
       }
     }
   }
@@ -1006,6 +1013,7 @@ struct UsageWindowView: View {
   var window: CodexUsageWindow
   var tint: Color
   var compact: Bool
+  var forcePercentDisplay = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
@@ -1013,7 +1021,7 @@ struct UsageWindowView: View {
         Text(displayLabel)
           .font(compact ? .body : .headline)
         Spacer()
-        Text(window.valueText ?? "\(Int(window.remainingPercent.rounded()))%")
+        Text(displayValueText)
           .font(.system(.title3, design: .rounded).weight(.semibold))
           .foregroundStyle(tint)
       }
@@ -1036,8 +1044,15 @@ struct UsageWindowView: View {
     return CodexResetText.string(resetAt: resetAt)
   }
 
+  private var displayValueText: String {
+    if forcePercentDisplay {
+      return "\(Int(window.remainingPercent.rounded()))%"
+    }
+    return window.valueText ?? "\(Int(window.remainingPercent.rounded()))%"
+  }
+
   private var showsProgressBar: Bool {
-    window.valueText == nil || window.label.hasSuffix("limit")
+    forcePercentDisplay || window.valueText == nil || window.label.hasSuffix("limit")
   }
 
   private var displayLabel: String {
