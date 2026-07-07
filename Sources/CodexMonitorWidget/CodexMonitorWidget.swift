@@ -207,18 +207,30 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
     _ = refreshFromAPI
     let date = Date()
     let settings = CodexSettingsStore().load()
+    let providerID = effectiveProviderID(configuration: configuration, settings: settings)
     return CodexUsageEntry(
       date: date,
       nextRefreshAt: settings.nextRefreshDate(after: date),
-      providerID: configuration.providerID,
+      providerID: providerID,
       snapshots: cachedSnapshot(
-        providerID: configuration.providerID,
+        providerID: providerID,
         settings: settings,
         openRouterKeyID: configuration.openRouterKeyID
       ).map { [$0] } ?? [],
       hideOpenRouterKeyUsage: !configuration.showsOpenRouterKeyUsageEffective,
       hideOpenRouterCredits: !configuration.showsOpenRouterCreditsEffective
     )
+  }
+
+  private func effectiveProviderID(
+    configuration: CodexWidgetConfigurationIntent,
+    settings: CodexMonitorSettings
+  ) -> CodexUsageProviderID {
+    let configuredProviderID = configuration.providerID
+    guard settings.enabledProviders.contains(configuredProviderID) else {
+      return settings.enabledProviders.first ?? configuredProviderID
+    }
+    return configuredProviderID
   }
 
   private func countdownEntries(from entry: CodexUsageEntry) -> [CodexUsageEntry] {

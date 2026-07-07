@@ -731,6 +731,26 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("filteringDisabledProviders(settings: settings)"))
   }
 
+  func testWidgetFallsBackToEnabledProviderWhenDefaultProviderIsDisabled() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let widgetSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent(
+        "Sources/CodexMonitorWidget/CodexMonitorWidget.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(widgetSource.contains("let providerID = effectiveProviderID(configuration: configuration, settings: settings)"))
+    XCTAssertTrue(widgetSource.contains("providerID: providerID"))
+    XCTAssertTrue(widgetSource.contains("providerID: providerID,\n        settings: settings"))
+    XCTAssertTrue(widgetSource.contains("private func effectiveProviderID("))
+    XCTAssertTrue(widgetSource.contains("settings.enabledProviders.contains(configuredProviderID)"))
+    XCTAssertTrue(widgetSource.contains("return settings.enabledProviders.first ?? configuredProviderID"))
+  }
+
   func testIOSWidgetProviderPickerExcludesClaudeCode() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let repositoryRoot = testFile
