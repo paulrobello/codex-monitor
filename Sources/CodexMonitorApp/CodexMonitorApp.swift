@@ -15,7 +15,7 @@ struct CodexMonitorApp: App {
   var body: some Scene {
     WindowGroup("Codex Monitor") {
       ContentView(store: store)
-        .frame(minWidth: 420, minHeight: 320)
+        .frame(minWidth: 420, minHeight: store.displayedSnapshots.count <= 1 ? 260 : 320)
         .task {
           store.start()
         }
