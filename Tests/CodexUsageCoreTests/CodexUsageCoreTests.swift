@@ -751,6 +751,8 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("providerID: providerID"))
     XCTAssertTrue(widgetSource.contains("providerID: providerID,\n        snapshots: snapshots"))
     XCTAssertTrue(widgetSource.contains("private func effectiveProviderID("))
+    XCTAssertTrue(widgetSource.contains("if configuration.openRouterKeyID != nil {"))
+    XCTAssertTrue(widgetSource.contains("return .openRouter"))
     XCTAssertTrue(widgetSource.contains("settings.enabledProviders.contains(configuredProviderID)"))
     XCTAssertTrue(widgetSource.contains("snapshots.contains(where: { $0.provider == configuredProviderID.rawValue })"))
     XCTAssertTrue(widgetSource.contains("let providerWithCachedSnapshot = settings.enabledProviders.first { providerID in"))
@@ -1262,6 +1264,20 @@ final class CodexUsageCoreTests: XCTestCase {
           .path
       )
     )
+  }
+
+  func testProjectVersionIsBumpedForWidgetMetadataRefresh() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let project = try String(
+      contentsOf: repositoryRoot.appendingPathComponent("project.yml"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 4"))
   }
 
   func testKeychainStoresCanOmitAccessGroupForUnprovisionedCLI() throws {

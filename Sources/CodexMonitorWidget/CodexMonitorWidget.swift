@@ -228,6 +228,9 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
     settings: CodexMonitorSettings,
     snapshots: [CodexUsageSnapshot]
   ) -> CodexUsageProviderID {
+    if configuration.openRouterKeyID != nil {
+      return .openRouter
+    }
     let configuredProviderID = configuration.providerID
     if settings.enabledProviders.contains(configuredProviderID),
       snapshots.contains(where: { $0.provider == configuredProviderID.rawValue })
