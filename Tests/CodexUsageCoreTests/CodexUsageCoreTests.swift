@@ -998,6 +998,12 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("@Parameter(title: \"Show Key Usage\", default: true)"))
     XCTAssertTrue(widgetSource.contains("@Parameter(title: \"Show Credits\", default: true)"))
     XCTAssertTrue(widgetSource.contains("@Parameter(title: \"OpenRouter Key\")"))
+    XCTAssertTrue(widgetSource.contains("static var parameterSummary: some ParameterSummary"))
+    XCTAssertTrue(widgetSource.contains("When(\\.$provider, .equalTo, .openRouter)"))
+    XCTAssertTrue(widgetSource.contains("Summary(\"Show \\(\\.$provider)\")"))
+    XCTAssertTrue(widgetSource.contains("\\.$openRouterKey"))
+    XCTAssertTrue(widgetSource.contains("\\.$showsOpenRouterKeyUsage"))
+    XCTAssertTrue(widgetSource.contains("\\.$showsOpenRouterCredits"))
     XCTAssertTrue(widgetSource.contains("case openAICodex = \"openai-codex\""))
     XCTAssertTrue(widgetSource.contains("case openRouter = \"openrouter\""))
     XCTAssertTrue(widgetSource.contains("case claudeCode = \"claude-code\""))
@@ -1340,7 +1346,7 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 12"))
+    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 13"))
   }
 
   func testKeychainStoresCanOmitAccessGroupForUnprovisionedCLI() throws {
