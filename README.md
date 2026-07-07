@@ -143,6 +143,9 @@ Build and use the `codex-usage` CLI:
 make refresh                           # Build + fetch current usage
 make install-service                   # Install app + register login service
 make uninstall-service                 # Unregister login service
+make uninstall-widgets                 # Unregister WidgetKit extension instances
+make uninstall-app                     # Remove ~/Applications/CodexMonitor.app
+make uninstall                         # Unregister service/widgets and remove app
 
 # After building, the CLI is at:
 build/DerivedData/Build/Products/Debug/codex-usage login         # Start OAuth login
@@ -225,6 +228,8 @@ make build         # Generate + build (CodexMonitor scheme)
 make test          # Generate + run tests (CodexUsageCoreTests)
 make checkall      # Build + test + lint + fmt + typecheck
 make install       # Build + copy .app to ~/Applications/
+make uninstall     # Unregister service/widgets and remove installed mac app
+make uninstall-mac # Alias for uninstall
 make run           # Install + launch
 make clean         # Remove build/ and .xcodeproj/
 ```

@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt typecheck checkall generate install install-service restart-service uninstall-service install-phone launch-phone run refresh clean
+.PHONY: build test lint fmt typecheck checkall generate install install-service restart-service uninstall uninstall-mac uninstall-service uninstall-widgets uninstall-app install-phone launch-phone run refresh clean
 
 PROJECT := CodexMonitor.xcodeproj
 SCHEME := CodexMonitor
@@ -23,6 +23,8 @@ INSTALL_DIR ?= $(HOME)/Applications
 INSTALLED_APP_BUNDLE := $(INSTALL_DIR)/$(APP_BUNDLE_NAME)
 INSTALLED_APP_EXECUTABLE := $(INSTALLED_APP_BUNDLE)/Contents/MacOS/$(APP_NAME)
 INSTALLED_SERVICE_LOGIN_ITEM := $(INSTALLED_APP_BUNDLE)/Contents/Library/LoginItems/$(SERVICE_APP_BUNDLE_NAME)
+INSTALLED_WIDGET_EXTENSION := $(INSTALLED_APP_BUNDLE)/$(APP_EXTENSION_PATH)
+BUILT_WIDGET_EXTENSION := $(abspath $(APP_BUNDLE))/$(APP_EXTENSION_PATH)
 PHONE_DEVICE ?= Pauls iPhone 17
 PHONE_DESTINATION ?= platform=iOS,name=$(PHONE_DEVICE)
 LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
@@ -70,12 +72,30 @@ install-service: install
 
 restart-service: install-service
 
+uninstall: uninstall-service uninstall-widgets uninstall-app
+
+uninstall-mac: uninstall
+
 uninstall-service:
-	@if [ ! -x "$(INSTALLED_APP_EXECUTABLE)" ]; then \
-		echo "$(INSTALLED_APP_EXECUTABLE) is missing; run make install first."; \
-		exit 1; \
+	@if [ -x "$(INSTALLED_APP_EXECUTABLE)" ]; then \
+		"$(INSTALLED_APP_EXECUTABLE)" --unregister-service; \
+	else \
+		echo "$(INSTALLED_APP_EXECUTABLE) is missing; skipping service unregister."; \
 	fi
-	"$(INSTALLED_APP_EXECUTABLE)" --unregister-service
+	pkill -f "$(SERVICE_PROCESS)" >/dev/null 2>&1 || true
+
+uninstall-widgets:
+	pkill -x "$(WIDGET_EXTENSION_PROCESS)" >/dev/null 2>&1 || true
+	pluginkit -m -A -D -vv | awk 'index($$0, "$(WIDGET_BUNDLE_ID)(") { matched = 1; next } matched && /^[[:space:]]*Path = / { sub(/^[[:space:]]*Path = /, ""); print; matched = 0 }' | while IFS= read -r stale_widget; do \
+		pluginkit -r "$$stale_widget" >/dev/null 2>&1 || true; \
+	done
+	pluginkit -r "$(INSTALLED_WIDGET_EXTENSION)" >/dev/null 2>&1 || true
+	pluginkit -r "$(BUILT_WIDGET_EXTENSION)" >/dev/null 2>&1 || true
+
+uninstall-app:
+	pkill -x "$(APP_NAME)" >/dev/null 2>&1 || true
+	"$(LSREGISTER)" -u "$(INSTALLED_APP_BUNDLE)" >/dev/null 2>&1 || true
+	rm -rf "$(INSTALLED_APP_BUNDLE)"
 
 install-phone: generate
 	xcodebuild $(XCODEBUILD_FLAGS) -project $(PROJECT) -scheme $(IOS_SCHEME) -configuration $(CONFIGURATION) -derivedDataPath $(DERIVED_DATA) -destination '$(PHONE_DESTINATION)' build

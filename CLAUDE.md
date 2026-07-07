@@ -14,6 +14,11 @@ make build           # Generate + xcodebuild (CodexMonitor scheme)
 make test            # Generate + xcodebuild test (CodexUsageCoreTests)
 make checkall        # build + test + lint + fmt + typecheck
 make install         # Build + copy .app to ~/Applications/CodexMonitor.app
+make uninstall       # Unregister service/widgets and remove ~/Applications/CodexMonitor.app
+make uninstall-mac   # Alias for uninstall
+make uninstall-service # Unregister the macOS login item service
+make uninstall-widgets # Unregister WidgetKit extension instances
+make uninstall-app   # Remove ~/Applications/CodexMonitor.app
 make run             # install + open
 make clean           # Remove build/ and CodexMonitor.xcodeproj/
 ```
