@@ -256,7 +256,8 @@ struct CodexMonitorWidgetView: View {
       if family == .systemSmall {
         if let snapshot = entry.snapshots.first {
           SmallWidgetUsageSummary(
-            providerName: smallWidgetProviderName(for: snapshot),
+            providerName: entry.providerID.displayName,
+            keyLabel: smallWidgetKeyLabel(for: snapshot),
             fiveHourWindow: visibleFiveHourWindow(for: snapshot),
             weeklyWindow: visibleWeeklyWindow(for: snapshot))
         } else {
@@ -322,11 +323,11 @@ struct CodexMonitorWidgetView: View {
     return snapshot.fiveHour
   }
 
-  private func smallWidgetProviderName(for snapshot: CodexUsageSnapshot) -> String {
+  private func smallWidgetKeyLabel(for snapshot: CodexUsageSnapshot) -> String? {
     if snapshot.provider == CodexUsageProviderID.openRouter.rawValue {
       return snapshot.openRouterWidgetKeyLabel
     }
-    return entry.providerID.displayName
+    return nil
   }
 
   private func visibleWeeklyWindow(for snapshot: CodexUsageSnapshot) -> CodexUsageWindow? {
@@ -382,16 +383,27 @@ struct CodexMonitorWidgetView: View {
 
 struct SmallWidgetUsageSummary: View {
   var providerName: String
+  var keyLabel: String?
   var fiveHourWindow: CodexUsageWindow?
   var weeklyWindow: CodexUsageWindow?
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text(providerName)
-        .font(.caption.weight(.semibold))
-        .lineLimit(1)
-        .minimumScaleFactor(0.75)
-        .allowsTightening(true)
+    VStack(alignment: .leading, spacing: 6) {
+      VStack(alignment: .leading, spacing: 1) {
+        Text(providerName)
+          .font(.caption.weight(.semibold))
+          .lineLimit(1)
+          .minimumScaleFactor(0.75)
+          .allowsTightening(true)
+        if let keyLabel {
+          Text(keyLabel)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .allowsTightening(true)
+        }
+      }
       Spacer(minLength: 0)
       if let fiveHourWindow {
         SmallWidgetPercentRow(label: compactLabel(for: fiveHourWindow), window: fiveHourWindow)
