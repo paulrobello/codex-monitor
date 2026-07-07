@@ -967,6 +967,42 @@ final class CodexUsageCoreTests: XCTestCase {
     }
   }
 
+  func testSmallWidgetUsesCompactTwoWindowPercentSummary() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let widgetSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent(
+        "Sources/CodexMonitorWidget/CodexMonitorWidget.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(widgetSource.contains("if family == .systemSmall {"))
+    XCTAssertTrue(widgetSource.contains("SmallWidgetUsageSummary("))
+    XCTAssertTrue(widgetSource.contains("providerName: entry.providerID.displayName"))
+    XCTAssertTrue(widgetSource.contains("fiveHourWindow: visibleFiveHourWindow(for: snapshot)"))
+    XCTAssertTrue(widgetSource.contains("weeklyWindow: visibleWeeklyWindow(for: snapshot)"))
+    XCTAssertTrue(widgetSource.contains("struct SmallWidgetUsageSummary: View"))
+    XCTAssertTrue(
+      widgetSource.contains(
+        "SmallWidgetPercentRow(label: compactLabel(for: fiveHourWindow), window: fiveHourWindow)"))
+    XCTAssertTrue(
+      widgetSource.contains(
+        "SmallWidgetPercentRow(label: compactLabel(for: weeklyWindow), window: weeklyWindow)"))
+    XCTAssertTrue(widgetSource.contains("private func compactLabel(for window: CodexUsageWindow) -> String"))
+    XCTAssertTrue(widgetSource.contains("case \"Key limit\", \"Key usage\":"))
+    XCTAssertTrue(widgetSource.contains("return \"Usage\""))
+    XCTAssertTrue(widgetSource.contains("case \"Credits\":"))
+    XCTAssertTrue(widgetSource.contains("return \"Credits\""))
+    XCTAssertTrue(widgetSource.contains("case \"wk\", \"7d limit\", \"7d tokens\":"))
+    XCTAssertTrue(widgetSource.contains("return \"7d\""))
+    XCTAssertTrue(widgetSource.contains("struct SmallWidgetPercentRow: View"))
+    XCTAssertTrue(widgetSource.contains("Text(\"\\(Int(window.remainingPercent.rounded()))%\")"))
+    XCTAssertTrue(widgetSource.contains(".minimumScaleFactor(0.75)"))
+  }
+
   func testAppUsageWindowsShowProgressBarsForLimitRowsWithValueText() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let repositoryRoot = testFile

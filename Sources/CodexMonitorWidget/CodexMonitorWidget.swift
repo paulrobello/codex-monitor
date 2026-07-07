@@ -253,41 +253,61 @@ struct CodexMonitorWidgetView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: family == .systemSmall ? 6 : 7) {
-      HStack(spacing: 6) {
-        Image(systemName: "gauge.with.dots.needle.bottom.50percent")
-          .font(.system(size: family == .systemSmall ? 12 : 13, weight: .semibold))
-          .foregroundStyle(.secondary)
-        Text(entry.snapshots.first?.displayName ?? entry.providerID.displayName)
-          .font(.caption.weight(.semibold))
-          .lineLimit(1)
-          .minimumScaleFactor(0.75)
-          .allowsTightening(true)
-          .layoutPriority(1)
-        Spacer(minLength: 4)
-        Self.nextRefreshLabel(for: entry.nextRefreshAt, now: entry.date)
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
-          .minimumScaleFactor(0.8)
-      }
-
-      if let snapshot = entry.snapshots.first {
-        if let fiveHour = visibleFiveHourWindow(for: snapshot) {
-          WidgetUsageRow(
-            window: fiveHour,
-            forcePercentDisplay: snapshot.provider == CodexUsageProviderID.claudeCode.rawValue)
-        }
-        if family != .systemSmall, let weekly = visibleWeeklyWindow(for: snapshot) {
-          WidgetUsageRow(
-            window: weekly,
-            forcePercentDisplay: snapshot.provider == CodexUsageProviderID.claudeCode.rawValue)
+      if family == .systemSmall {
+        if let snapshot = entry.snapshots.first {
+          SmallWidgetUsageSummary(
+            providerName: entry.providerID.displayName,
+            fiveHourWindow: visibleFiveHourWindow(for: snapshot),
+            weeklyWindow: visibleWeeklyWindow(for: snapshot))
+        } else {
+          Spacer()
+          Text(entry.providerID.displayName)
+            .font(.caption.weight(.semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+          Text("Set up in app")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+          Spacer()
         }
       } else {
-        Spacer()
-        Text("Open Codex Monitor to set up \(entry.providerID.displayName).")
-          .font(.callout)
-          .foregroundStyle(.secondary)
-        Spacer()
+        HStack(spacing: 6) {
+          Image(systemName: "gauge.with.dots.needle.bottom.50percent")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.secondary)
+          Text(entry.snapshots.first?.displayName ?? entry.providerID.displayName)
+            .font(.caption.weight(.semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .allowsTightening(true)
+            .layoutPriority(1)
+          Spacer(minLength: 4)
+          Self.nextRefreshLabel(for: entry.nextRefreshAt, now: entry.date)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+        }
+
+        if let snapshot = entry.snapshots.first {
+          if let fiveHour = visibleFiveHourWindow(for: snapshot) {
+            WidgetUsageRow(
+              window: fiveHour,
+              forcePercentDisplay: snapshot.provider == CodexUsageProviderID.claudeCode.rawValue)
+          }
+          if let weekly = visibleWeeklyWindow(for: snapshot) {
+            WidgetUsageRow(
+              window: weekly,
+              forcePercentDisplay: snapshot.provider == CodexUsageProviderID.claudeCode.rawValue)
+          }
+        } else {
+          Spacer()
+          Text("Open Codex Monitor to set up \(entry.providerID.displayName).")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+          Spacer()
+        }
       }
     }
     .padding(.horizontal, family == .systemSmall ? 14 : 20)
@@ -351,6 +371,77 @@ struct CodexMonitorWidgetView: View {
     return "in \(hours)h \(minutes)m"
   }
 
+}
+
+struct SmallWidgetUsageSummary: View {
+  var providerName: String
+  var fiveHourWindow: CodexUsageWindow?
+  var weeklyWindow: CodexUsageWindow?
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text(providerName)
+        .font(.caption.weight(.semibold))
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+        .allowsTightening(true)
+      Spacer(minLength: 0)
+      if let fiveHourWindow {
+        SmallWidgetPercentRow(label: compactLabel(for: fiveHourWindow), window: fiveHourWindow)
+      }
+      if let weeklyWindow {
+        SmallWidgetPercentRow(label: compactLabel(for: weeklyWindow), window: weeklyWindow)
+      }
+      Spacer(minLength: 0)
+    }
+  }
+
+  private func compactLabel(for window: CodexUsageWindow) -> String {
+    switch window.label {
+    case "Key limit", "Key usage":
+      return "Usage"
+    case "Credits":
+      return "Credits"
+    case "5h", "5h limit", "5h tokens":
+      return "5h"
+    case "wk", "7d limit", "7d tokens":
+      return "7d"
+    default:
+      return window.label
+    }
+  }
+}
+
+struct SmallWidgetPercentRow: View {
+  var label: String
+  var window: CodexUsageWindow
+
+  var body: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 6) {
+      Text(label)
+        .font(.system(size: 12, weight: .semibold))
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+      Spacer(minLength: 4)
+      Text("\(Int(window.remainingPercent.rounded()))%")
+        .font(.system(size: 16, weight: .bold, design: .rounded))
+        .monospacedDigit()
+        .foregroundStyle(tint)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+    }
+  }
+
+  private var tint: Color {
+    if window.remainingPercent < 15 {
+      return .red
+    }
+    if window.remainingPercent < 50 {
+      return .orange
+    }
+    return .green
+  }
 }
 
 private extension CodexUsageSnapshot {
