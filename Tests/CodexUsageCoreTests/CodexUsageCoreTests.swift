@@ -877,6 +877,8 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(appSource.contains("Button(\"Save Label\")"))
     XCTAssertTrue(appSource.contains("Button(\"Add Key\")"))
     XCTAssertTrue(appSource.contains("renameOpenRouterAPIKey"))
+    XCTAssertTrue(appSource.contains("syncOpenRouterAPIKeyDescriptors(openRouterKeys)"))
+    XCTAssertTrue(appSource.contains("private func syncOpenRouterAPIKeyDescriptors(_ descriptors: [OpenRouterAPIKeyDescriptor])"))
     XCTAssertTrue(appSource.contains("Toggle(\"Show OpenRouter Key Usage\""))
     XCTAssertTrue(appSource.contains("Toggle(\"Show OpenRouter Credits\""))
     XCTAssertTrue(appSource.contains("openRouterKeyUsageBinding"))
@@ -904,6 +906,8 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(iosSource.contains("Button(\"Save Label\")"))
     XCTAssertTrue(iosSource.contains("Button(\"Add Key\")"))
     XCTAssertTrue(iosSource.contains("renameOpenRouterAPIKey"))
+    XCTAssertTrue(iosSource.contains("syncOpenRouterAPIKeyDescriptors(openRouterKeys)"))
+    XCTAssertTrue(iosSource.contains("private func syncOpenRouterAPIKeyDescriptors(_ descriptors: [OpenRouterAPIKeyDescriptor])"))
     XCTAssertTrue(iosSource.contains("Toggle(\"Show OpenRouter Key Usage\""))
     XCTAssertTrue(iosSource.contains("Toggle(\"Show OpenRouter Credits\""))
     XCTAssertTrue(iosSource.contains("openRouterKeyUsageBinding"))
@@ -1336,7 +1340,7 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 11"))
+    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 12"))
   }
 
   func testKeychainStoresCanOmitAccessGroupForUnprovisionedCLI() throws {

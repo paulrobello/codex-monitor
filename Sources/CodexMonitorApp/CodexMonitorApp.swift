@@ -190,6 +190,7 @@ final class UsageStore: ObservableObject {
       settings: settings,
       serviceLaunchAtLoginEnabled: serviceLaunchAtLoginEnabled
     )
+    syncOpenRouterAPIKeyDescriptors(openRouterKeys)
   }
 
   deinit {
@@ -495,6 +496,10 @@ final class UsageStore: ObservableObject {
     let descriptors = (try? openRouterAPIKeyStore.loadAPIKeyDescriptors()) ?? []
     openRouterAPIKeys = descriptors
     hasOpenRouterAPIKey = !descriptors.isEmpty
+    syncOpenRouterAPIKeyDescriptors(descriptors)
+  }
+
+  private func syncOpenRouterAPIKeyDescriptors(_ descriptors: [OpenRouterAPIKeyDescriptor]) {
     let nextSettings = CodexMonitorSettings(
       refreshIntervalMinutes: settings.refreshIntervalMinutes,
       enabledProviders: settings.enabledProviders,

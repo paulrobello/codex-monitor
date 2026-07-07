@@ -71,6 +71,7 @@ final class iOSUsageStore: ObservableObject {
     if supportedSettings != loadedSettings {
       try? settingsStore.save(supportedSettings)
     }
+    syncOpenRouterAPIKeyDescriptors(openRouterKeys)
   }
 
   deinit {
@@ -336,6 +337,10 @@ final class iOSUsageStore: ObservableObject {
     let descriptors = (try? openRouterAPIKeyStore.loadAPIKeyDescriptors()) ?? []
     openRouterAPIKeys = descriptors
     hasOpenRouterAPIKey = !descriptors.isEmpty
+    syncOpenRouterAPIKeyDescriptors(descriptors)
+  }
+
+  private func syncOpenRouterAPIKeyDescriptors(_ descriptors: [OpenRouterAPIKeyDescriptor]) {
     let nextSettings = CodexMonitorSettings(
       refreshIntervalMinutes: settings.refreshIntervalMinutes,
       enabledProviders: settings.enabledProviders,
