@@ -45,7 +45,12 @@ struct CodexMonitorApp: App {
     MenuBarExtra("Codex", systemImage: store.menuBarSymbolName) {
       if !store.displayedSnapshots.isEmpty {
         ForEach(store.displayedSnapshots, id: \.instanceID) { snapshot in
-          UsageSummaryView(snapshot: snapshot, compact: true, showProviderName: true)
+          UsageSummaryView(
+            snapshot: snapshot,
+            compact: true,
+            showProviderName: true,
+            hideOpenRouterCredits: store.settings.hideOpenRouterCredits
+          )
         }
         Divider()
       } else {
@@ -299,7 +304,8 @@ final class UsageStore: ObservableObject {
       enabledProviders: settings.enabledProviders,
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: settings.beaconAPIPort,
-      beaconProviderColors: settings.beaconProviderColors
+      beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
     nextRefreshAt = nextSettings.nextRefreshDate(after: Date())
@@ -319,7 +325,8 @@ final class UsageStore: ObservableObject {
       enabledProviders: providers,
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: settings.beaconAPIPort,
-      beaconProviderColors: settings.beaconProviderColors
+      beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
     WidgetCenter.shared.reloadAllTimelines()
@@ -334,7 +341,8 @@ final class UsageStore: ObservableObject {
       enabledProviders: settings.enabledProviders,
       beaconAPIEnabled: enabled,
       beaconAPIPort: settings.beaconAPIPort,
-      beaconProviderColors: settings.beaconProviderColors
+      beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
   }
@@ -345,7 +353,8 @@ final class UsageStore: ObservableObject {
       enabledProviders: settings.enabledProviders,
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: port,
-      beaconProviderColors: settings.beaconProviderColors
+      beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
   }
@@ -358,9 +367,23 @@ final class UsageStore: ObservableObject {
       enabledProviders: settings.enabledProviders,
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: settings.beaconAPIPort,
-      beaconProviderColors: providerColors
+      beaconProviderColors: providerColors,
+      hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
+  }
+
+  func setHideOpenRouterCredits(_ hidden: Bool) {
+    let nextSettings = CodexMonitorSettings(
+      refreshIntervalMinutes: settings.refreshIntervalMinutes,
+      enabledProviders: settings.enabledProviders,
+      beaconAPIEnabled: settings.beaconAPIEnabled,
+      beaconAPIPort: settings.beaconAPIPort,
+      beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterCredits: hidden
+    )
+    saveSettingsAndApplyBeaconAPI(nextSettings)
+    WidgetCenter.shared.reloadAllTimelines()
   }
 
   func regenerateBeaconAPIKey() {
@@ -604,7 +627,11 @@ struct ContentView: View {
 
       if !store.displayedSnapshots.isEmpty {
         ForEach(store.displayedSnapshots, id: \.instanceID) { snapshot in
-          UsageSummaryView(snapshot: snapshot, showProviderName: true)
+          UsageSummaryView(
+            snapshot: snapshot,
+            showProviderName: true,
+            hideOpenRouterCredits: store.settings.hideOpenRouterCredits
+          )
         }
       } else {
         ContentUnavailableView(
@@ -712,6 +739,7 @@ struct SettingsView: View {
             }
           }
         }
+        Toggle("Hide OpenRouter Credits", isOn: hideOpenRouterCreditsBinding)
         Divider()
         VStack(alignment: .leading, spacing: 6) {
           Text("Add OpenRouter API Key")
@@ -801,6 +829,13 @@ struct SettingsView: View {
     )
   }
 
+  private var hideOpenRouterCreditsBinding: Binding<Bool> {
+    Binding(
+      get: { store.settings.hideOpenRouterCredits },
+      set: { store.setHideOpenRouterCredits($0) }
+    )
+  }
+
   private var hasStoredOpenRouterAPIKeys: Bool {
     store.openRouterAPIKeys.contains { !$0.isEnvironment }
   }
@@ -871,6 +906,7 @@ struct UsageSummaryView: View {
   var snapshot: CodexUsageSnapshot
   var compact = false
   var showProviderName = false
+  var hideOpenRouterCredits = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: compact ? 10 : 14) {
@@ -882,10 +918,23 @@ struct UsageSummaryView: View {
         UsageWindowView(
           window: fiveHour, tint: color(for: fiveHour.remainingPercent), compact: compact)
       }
-      if let weekly = snapshot.weekly {
+      if let weekly = visibleWeeklyWindow {
         UsageWindowView(window: weekly, tint: color(for: weekly.remainingPercent), compact: compact)
       }
     }
+  }
+
+  private var visibleWeeklyWindow: CodexUsageWindow? {
+    guard !isOpenRouterCreditsWindow else {
+      return nil
+    }
+    return snapshot.weekly
+  }
+
+  private var isOpenRouterCreditsWindow: Bool {
+    hideOpenRouterCredits
+      && snapshot.provider == CodexUsageProviderID.openRouter.rawValue
+      && snapshot.weekly?.label == "Credits"
   }
 
   private func color(for remainingPercent: Double) -> Color {

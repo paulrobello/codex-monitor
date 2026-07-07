@@ -8,6 +8,7 @@ struct CodexUsageEntry: TimelineEntry {
   let nextRefreshAt: Date
   let providerID: CodexUsageProviderID
   let snapshots: [CodexUsageSnapshot]
+  let hideOpenRouterCredits: Bool
 }
 
 enum CodexWidgetProviderChoice: String, AppEnum {
@@ -81,7 +82,8 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
           weekly: CodexUsageWindow(
             label: "wk", remainingPercent: 48, resetAt: Date().addingTimeInterval(172800))
         )
-      ]
+      ],
+      hideOpenRouterCredits: false
     )
   }
 
@@ -108,7 +110,8 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
       date: date,
       nextRefreshAt: settings.nextRefreshDate(after: date),
       providerID: configuration.providerID,
-      snapshots: cachedSnapshot(providerID: configuration.providerID, settings: settings).map { [$0] } ?? []
+      snapshots: cachedSnapshot(providerID: configuration.providerID, settings: settings).map { [$0] } ?? [],
+      hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
   }
 
@@ -135,7 +138,8 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
       date: date,
       nextRefreshAt: entry.nextRefreshAt,
       providerID: entry.providerID,
-      snapshots: entry.snapshots
+      snapshots: entry.snapshots,
+      hideOpenRouterCredits: entry.hideOpenRouterCredits
     )
   }
 
@@ -181,7 +185,7 @@ struct CodexMonitorWidgetView: View {
         if let fiveHour = snapshot.fiveHour {
           WidgetUsageRow(window: fiveHour)
         }
-        if family != .systemSmall, let weekly = snapshot.weekly {
+        if family != .systemSmall, let weekly = visibleWeeklyWindow(for: snapshot) {
           WidgetUsageRow(window: weekly)
         }
       } else {
@@ -195,6 +199,19 @@ struct CodexMonitorWidgetView: View {
     .padding(.horizontal, family == .systemSmall ? 14 : 20)
     .padding(.vertical, family == .systemSmall ? 14 : 18)
     .containerBackground(.background, for: .widget)
+  }
+
+  private func visibleWeeklyWindow(for snapshot: CodexUsageSnapshot) -> CodexUsageWindow? {
+    guard !isOpenRouterCreditsWindow(snapshot) else {
+      return nil
+    }
+    return snapshot.weekly
+  }
+
+  private func isOpenRouterCreditsWindow(_ snapshot: CodexUsageSnapshot) -> Bool {
+    entry.hideOpenRouterCredits
+      && snapshot.provider == CodexUsageProviderID.openRouter.rawValue
+      && snapshot.weekly?.label == "Credits"
   }
 
   @ViewBuilder

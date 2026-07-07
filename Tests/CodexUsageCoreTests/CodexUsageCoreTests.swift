@@ -122,6 +122,7 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertFalse(settings.beaconAPIEnabled)
     XCTAssertEqual(settings.beaconAPIPort, 8765)
     XCTAssertEqual(settings.refreshIntervalMinutes, 15)
+    XCTAssertFalse(settings.hideOpenRouterCredits)
   }
 
   func testMonitorSettingsClampBeaconAPIPort() throws {
@@ -144,6 +145,15 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(decoded.beaconProviderColors[CodexUsageProviderID.openAICodex.rawValue], color)
     XCTAssertEqual(decoded.beaconAccentColor(for: .openAICodex), color)
     XCTAssertEqual(decoded.beaconAccentColor(for: .openRouter), CodexUsageProviderID.openRouter.beaconAccentColor)
+  }
+
+  func testMonitorSettingsPersistOpenRouterCreditsVisibility() throws {
+    let settings = CodexMonitorSettings(hideOpenRouterCredits: true)
+
+    let data = try JSONEncoder.codexMonitor.encode(settings)
+    let decoded = try JSONDecoder.codexMonitor.decode(CodexMonitorSettings.self, from: data)
+
+    XCTAssertTrue(decoded.hideOpenRouterCredits)
   }
 
   func testSnapshotsFilterToEnabledProviders() {
@@ -794,6 +804,9 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(appSource.contains("Button(\"Save Label\")"))
     XCTAssertTrue(appSource.contains("Button(\"Add Key\")"))
     XCTAssertTrue(appSource.contains("renameOpenRouterAPIKey"))
+    XCTAssertTrue(appSource.contains("Toggle(\"Hide OpenRouter Credits\""))
+    XCTAssertTrue(appSource.contains("hideOpenRouterCreditsBinding"))
+    XCTAssertTrue(appSource.contains("setHideOpenRouterCredits"))
     XCTAssertFalse(appSource.contains("beaconHTTPServer"))
     XCTAssertFalse(appSource.contains("startBeaconServerIfNeeded"))
   }
@@ -885,6 +898,9 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("private var showsProgressBar: Bool"))
     XCTAssertTrue(widgetSource.contains("window.valueText == nil || window.label.hasSuffix(\"limit\")"))
     XCTAssertTrue(widgetSource.contains("if showsProgressBar {"))
+    XCTAssertTrue(widgetSource.contains("let hideOpenRouterCredits: Bool"))
+    XCTAssertTrue(widgetSource.contains("hideOpenRouterCredits: settings.hideOpenRouterCredits"))
+    XCTAssertTrue(widgetSource.contains("private func visibleWeeklyWindow(for snapshot: CodexUsageSnapshot)"))
     XCTAssertFalse(widgetSource.contains("ProgressView(value: window.remainingPercent, total: 100)"))
 
     for appSource in appSources {
@@ -910,6 +926,24 @@ final class CodexUsageCoreTests: XCTestCase {
       XCTAssertTrue(source.contains("window.valueText == nil || window.label.hasSuffix(\"limit\")"))
       XCTAssertTrue(source.contains("if showsProgressBar {"))
     }
+  }
+
+  func testMacAppCanHideOpenRouterCreditsWindow() throws {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let repositoryRoot = testFile
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let appSource = try String(
+      contentsOf: repositoryRoot.appendingPathComponent(
+        "Sources/CodexMonitorApp/CodexMonitorApp.swift"),
+      encoding: .utf8
+    )
+
+    XCTAssertTrue(appSource.contains("hideOpenRouterCredits: store.settings.hideOpenRouterCredits"))
+    XCTAssertTrue(appSource.contains("private var visibleWeeklyWindow: CodexUsageWindow?"))
+    XCTAssertTrue(appSource.contains("private var isOpenRouterCreditsWindow: Bool"))
+    XCTAssertTrue(appSource.contains("if let weekly = visibleWeeklyWindow"))
   }
 
   func testCLIRefreshUsesCollectionServiceAndReadsCache() throws {

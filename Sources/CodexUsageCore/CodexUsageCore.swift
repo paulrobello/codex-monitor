@@ -2015,19 +2015,22 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
   public var beaconAPIEnabled: Bool
   public var beaconAPIPort: Int
   public var beaconProviderColors: [String: BeaconRGB]
+  public var hideOpenRouterCredits: Bool
 
   public init(
     refreshIntervalMinutes: Int = Self.defaultRefreshIntervalMinutes,
     enabledProviders: [CodexUsageProviderID] = [.openAICodex],
     beaconAPIEnabled: Bool = false,
     beaconAPIPort: Int = Self.defaultBeaconAPIPort,
-    beaconProviderColors: [String: BeaconRGB] = [:]
+    beaconProviderColors: [String: BeaconRGB] = [:],
+    hideOpenRouterCredits: Bool = false
   ) {
     self.refreshIntervalMinutes = Self.normalizedRefreshIntervalMinutes(refreshIntervalMinutes)
     self.enabledProviders = Self.normalizedEnabledProviders(enabledProviders)
     self.beaconAPIEnabled = beaconAPIEnabled
     self.beaconAPIPort = Self.normalizedBeaconAPIPort(beaconAPIPort)
     self.beaconProviderColors = Self.normalizedBeaconProviderColors(beaconProviderColors)
+    self.hideOpenRouterCredits = hideOpenRouterCredits
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -2036,6 +2039,7 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
     case beaconAPIEnabled
     case beaconAPIPort
     case beaconProviderColors
+    case hideOpenRouterCredits
   }
 
   public init(from decoder: Decoder) throws {
@@ -2051,12 +2055,15 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
       try container.decodeIfPresent(Int.self, forKey: .beaconAPIPort) ?? Self.defaultBeaconAPIPort
     let beaconProviderColors =
       try container.decodeIfPresent([String: BeaconRGB].self, forKey: .beaconProviderColors) ?? [:]
+    let hideOpenRouterCredits =
+      try container.decodeIfPresent(Bool.self, forKey: .hideOpenRouterCredits) ?? false
     self.init(
       refreshIntervalMinutes: refreshIntervalMinutes,
       enabledProviders: enabledProviders,
       beaconAPIEnabled: beaconAPIEnabled,
       beaconAPIPort: beaconAPIPort,
-      beaconProviderColors: beaconProviderColors
+      beaconProviderColors: beaconProviderColors,
+      hideOpenRouterCredits: hideOpenRouterCredits
     )
   }
 
@@ -2067,6 +2074,7 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
     try container.encode(beaconAPIEnabled, forKey: .beaconAPIEnabled)
     try container.encode(beaconAPIPort, forKey: .beaconAPIPort)
     try container.encode(beaconProviderColors, forKey: .beaconProviderColors)
+    try container.encode(hideOpenRouterCredits, forKey: .hideOpenRouterCredits)
   }
 
   public var refreshIntervalSeconds: TimeInterval {
@@ -2131,7 +2139,8 @@ public final class CodexSettingsStore: @unchecked Sendable {
       enabledProviders: settings.enabledProviders,
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: settings.beaconAPIPort,
-      beaconProviderColors: settings.beaconProviderColors
+      beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
   }
 

@@ -178,7 +178,8 @@ final class iOSUsageStore: ObservableObject {
       enabledProviders: settings.enabledProviders,
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: settings.beaconAPIPort,
-      beaconProviderColors: settings.beaconProviderColors
+      beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
     do {
       try settingsStore.save(nextSettings)
@@ -206,7 +207,8 @@ final class iOSUsageStore: ObservableObject {
       enabledProviders: providers,
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: settings.beaconAPIPort,
-      beaconProviderColors: settings.beaconProviderColors
+      beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
     do {
       try settingsStore.save(nextSettings)
@@ -228,7 +230,8 @@ final class iOSUsageStore: ObservableObject {
       enabledProviders: settings.enabledProviders.filter { supportedProviders.contains($0) },
       beaconAPIEnabled: settings.beaconAPIEnabled,
       beaconAPIPort: settings.beaconAPIPort,
-      beaconProviderColors: settings.beaconProviderColors
+      beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterCredits: settings.hideOpenRouterCredits
     )
   }
 
