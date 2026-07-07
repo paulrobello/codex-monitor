@@ -978,7 +978,11 @@ struct UsageSummaryView: View {
   private var isOpenRouterKeyUsageWindow: Bool {
     hideOpenRouterKeyUsage
       && snapshot.provider == CodexUsageProviderID.openRouter.rawValue
-      && snapshot.fiveHour?.label == "Key limit"
+      && isOpenRouterKeyUsageLabel(snapshot.fiveHour?.label)
+  }
+
+  private func isOpenRouterKeyUsageLabel(_ label: String?) -> Bool {
+    label == "Key limit" || label == "Key usage"
   }
 
   private var isOpenRouterCreditsWindow: Bool {

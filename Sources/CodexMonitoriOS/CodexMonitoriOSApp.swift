@@ -238,6 +238,47 @@ final class iOSUsageStore: ObservableObject {
     )
   }
 
+  private func saveSettings(_ nextSettings: CodexMonitorSettings) {
+    do {
+      try settingsStore.save(nextSettings)
+      settings = nextSettings
+      errorMessage = nil
+      WidgetCenter.shared.reloadAllTimelines()
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  func setOpenRouterKeyUsageVisible(_ visible: Bool) {
+    let hideKeyUsage = !visible
+    let hideCredits = hideKeyUsage && settings.hideOpenRouterCredits ? false : settings.hideOpenRouterCredits
+    let nextSettings = CodexMonitorSettings(
+      refreshIntervalMinutes: settings.refreshIntervalMinutes,
+      enabledProviders: settings.enabledProviders,
+      beaconAPIEnabled: settings.beaconAPIEnabled,
+      beaconAPIPort: settings.beaconAPIPort,
+      beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterKeyUsage: hideKeyUsage,
+      hideOpenRouterCredits: hideCredits
+    )
+    saveSettings(nextSettings)
+  }
+
+  func setOpenRouterCreditsVisible(_ visible: Bool) {
+    let hideCredits = !visible
+    let hideKeyUsage = hideCredits && settings.hideOpenRouterKeyUsage ? false : settings.hideOpenRouterKeyUsage
+    let nextSettings = CodexMonitorSettings(
+      refreshIntervalMinutes: settings.refreshIntervalMinutes,
+      enabledProviders: settings.enabledProviders,
+      beaconAPIEnabled: settings.beaconAPIEnabled,
+      beaconAPIPort: settings.beaconAPIPort,
+      beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterKeyUsage: hideKeyUsage,
+      hideOpenRouterCredits: hideCredits
+    )
+    saveSettings(nextSettings)
+  }
+
   func saveOpenRouterAPIKey(_ apiKey: String) {
     saveOpenRouterAPIKey(label: "", apiKey: apiKey)
   }
@@ -395,7 +436,9 @@ struct iOSContentView: View {
               iOSUsageSummaryView(
                 snapshot: snapshot,
                 nextRefreshAt: store.nextRefreshAt,
-                showProviderName: true
+                showProviderName: true,
+                hideOpenRouterKeyUsage: store.settings.hideOpenRouterKeyUsage,
+                hideOpenRouterCredits: store.settings.hideOpenRouterCredits
               )
             }
           } else {
@@ -463,6 +506,10 @@ struct iOSContentView: View {
             )
             .font(.caption)
             .foregroundStyle(.secondary)
+            Toggle("Show OpenRouter Key Usage", isOn: openRouterKeyUsageBinding)
+              .disabled(!store.settings.hideOpenRouterKeyUsage && store.settings.hideOpenRouterCredits)
+            Toggle("Show OpenRouter Credits", isOn: openRouterCreditsBinding)
+              .disabled(store.settings.hideOpenRouterKeyUsage && !store.settings.hideOpenRouterCredits)
             if !store.openRouterAPIKeys.isEmpty {
               ForEach(store.openRouterAPIKeys) { descriptor in
                 VStack(alignment: .leading, spacing: 6) {
@@ -578,6 +625,20 @@ struct iOSContentView: View {
     )
   }
 
+  private var openRouterKeyUsageBinding: Binding<Bool> {
+    Binding(
+      get: { !store.settings.hideOpenRouterKeyUsage },
+      set: { store.setOpenRouterKeyUsageVisible($0) }
+    )
+  }
+
+  private var openRouterCreditsBinding: Binding<Bool> {
+    Binding(
+      get: { !store.settings.hideOpenRouterCredits },
+      set: { store.setOpenRouterCreditsVisible($0) }
+    )
+  }
+
   private var hasStoredOpenRouterAPIKeys: Bool {
     store.openRouterAPIKeys.contains { !$0.isEnvironment }
   }
@@ -604,6 +665,8 @@ struct iOSUsageSummaryView: View {
   var snapshot: CodexUsageSnapshot
   var nextRefreshAt: Date?
   var showProviderName = false
+  var hideOpenRouterKeyUsage = false
+  var hideOpenRouterCredits = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
@@ -619,14 +682,44 @@ struct iOSUsageSummaryView: View {
         .foregroundStyle(.secondary)
       }
 
-      if let fiveHour = snapshot.fiveHour {
+      if let fiveHour = visibleFiveHourWindow {
         iOSUsageWindowView(window: fiveHour)
       }
-      if let weekly = snapshot.weekly {
+      if let weekly = visibleWeeklyWindow {
         iOSUsageWindowView(window: weekly)
       }
     }
     .padding(.vertical, 4)
+  }
+
+  private var visibleFiveHourWindow: CodexUsageWindow? {
+    guard !isOpenRouterKeyUsageWindow else {
+      return nil
+    }
+    return snapshot.fiveHour
+  }
+
+  private var visibleWeeklyWindow: CodexUsageWindow? {
+    guard !isOpenRouterCreditsWindow else {
+      return nil
+    }
+    return snapshot.weekly
+  }
+
+  private var isOpenRouterKeyUsageWindow: Bool {
+    hideOpenRouterKeyUsage
+      && snapshot.provider == CodexUsageProviderID.openRouter.rawValue
+      && isOpenRouterKeyUsageLabel(snapshot.fiveHour?.label)
+  }
+
+  private func isOpenRouterKeyUsageLabel(_ label: String?) -> Bool {
+    label == "Key limit" || label == "Key usage"
+  }
+
+  private var isOpenRouterCreditsWindow: Bool {
+    hideOpenRouterCredits
+      && snapshot.provider == CodexUsageProviderID.openRouter.rawValue
+      && snapshot.weekly?.label == "Credits"
   }
 
 }

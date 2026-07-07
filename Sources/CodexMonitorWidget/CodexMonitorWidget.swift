@@ -308,7 +308,11 @@ struct CodexMonitorWidgetView: View {
   private func isOpenRouterKeyUsageWindow(_ snapshot: CodexUsageSnapshot) -> Bool {
     entry.hideOpenRouterKeyUsage
       && snapshot.provider == CodexUsageProviderID.openRouter.rawValue
-      && snapshot.fiveHour?.label == "Key limit"
+      && isOpenRouterKeyUsageLabel(snapshot.fiveHour?.label)
+  }
+
+  private func isOpenRouterKeyUsageLabel(_ label: String?) -> Bool {
+    label == "Key limit" || label == "Key usage"
   }
 
   private func isOpenRouterCreditsWindow(_ snapshot: CodexUsageSnapshot) -> Bool {
