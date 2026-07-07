@@ -707,7 +707,7 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertFalse(source.contains("Text(date, style: .relative)"))
   }
 
-  func testWidgetReadsCachedUsageAndDoesNotFetchProviderAPIs() throws {
+  func testWidgetReadsCachedUsageAndOnlyFetchesOpenRouterAsFallback() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let repositoryRoot = testFile
       .deletingLastPathComponent()
@@ -722,6 +722,9 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("cachedSnapshot("))
     XCTAssertTrue(widgetSource.contains("openRouterKeyID: configuration.openRouterKeyID"))
     XCTAssertTrue(widgetSource.contains("CodexUsageCache().loadSnapshots()"))
+    XCTAssertTrue(widgetSource.contains("await fetchOpenRouterSnapshot("))
+    XCTAssertTrue(widgetSource.contains("OpenRouterUsageClient(timeout: 10).fetchUsage("))
+    XCTAssertTrue(widgetSource.contains("private func openRouterCredential(id: String?, label: String?)"))
     XCTAssertFalse(widgetSource.contains("fetchAndCacheSnapshot"))
     XCTAssertFalse(widgetSource.contains("UsageProviderClient().fetchUsage"))
     XCTAssertFalse(widgetSource.contains("CodexAuthStore()"))
@@ -769,7 +772,8 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("appendProvider(providerID, to: &snapshotProviderIDs)"))
     XCTAssertTrue(widgetSource.contains("let snapshots = allSnapshots.filteringProviders(snapshotProviderIDs)"))
     XCTAssertTrue(widgetSource.contains("providerID: providerID"))
-    XCTAssertTrue(widgetSource.contains("providerID: providerID,\n        snapshots: snapshots"))
+    XCTAssertTrue(widgetSource.contains("var snapshot = cachedSnapshot("))
+    XCTAssertTrue(widgetSource.contains("snapshots: snapshot.map { [$0] } ?? []"))
     XCTAssertTrue(widgetSource.contains("private func effectiveProviderID("))
     XCTAssertTrue(widgetSource.contains("if configuration.openRouterKeyID != nil {"))
     XCTAssertTrue(widgetSource.contains("return .openRouter"))
@@ -1045,6 +1049,10 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("openRouterKeyID: configuration.openRouterKeyID"))
     XCTAssertTrue(widgetSource.contains("openRouterKeyLabel: openRouterKeyLabel"))
     XCTAssertTrue(widgetSource.contains("snapshot.matchesOpenRouterWidgetKey(id: openRouterKeyID, label: openRouterKeyLabel)"))
+    XCTAssertTrue(widgetSource.contains("private func fetchOpenRouterSnapshot("))
+    XCTAssertTrue(widgetSource.contains("guard providerID == .openRouter,"))
+    XCTAssertTrue(widgetSource.contains("OpenRouterUsageClient(timeout: 10).fetchUsage("))
+    XCTAssertTrue(widgetSource.contains("private func credentialMatchesOpenRouterWidgetKey("))
     XCTAssertTrue(widgetSource.contains("\"\\(CodexUsageProviderID.openRouter.rawValue):\\(value)\""))
     XCTAssertTrue(widgetSource.contains("if legacyOpenRouterWidgetKeyIDs.contains(where: { $0.caseInsensitiveCompare(id) == .orderedSame })"))
     XCTAssertTrue(widgetSource.contains("private func resolvedOpenRouterKeyLabel("))
@@ -1592,6 +1600,88 @@ final class CodexUsageCoreTests: XCTestCase {
     try JSONEncoder.codexMonitor.encode(snapshot).write(to: url)
 
     XCTAssertEqual(try cache.loadSnapshots(), [snapshot])
+  }
+
+  func testCacheMirrorsSnapshotsToFallbackURL() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let primaryURL = directory.appendingPathComponent("primary/usage.json")
+    let fallbackURL = directory.appendingPathComponent("fallback/usage.json")
+    let cache = CodexUsageCache(cacheURL: primaryURL, fallbackCacheURL: fallbackURL)
+    let snapshot = CodexUsageSnapshot(
+      provider: CodexUsageProviderID.openRouter.rawValue,
+      fetchedAt: Date(timeIntervalSince1970: 0),
+      fiveHour: CodexUsageWindow(label: "Key usage", remainingPercent: 100, resetAt: nil),
+      weekly: CodexUsageWindow(label: "Credits", remainingPercent: 34, resetAt: nil),
+      accountID: "default",
+      accountLabel: "Personal"
+    )
+
+    try cache.save(snapshots: [snapshot])
+
+    XCTAssertEqual(try CodexUsageCache(cacheURL: primaryURL).loadSnapshots(), [snapshot])
+    XCTAssertEqual(try CodexUsageCache(cacheURL: fallbackURL).loadSnapshots(), [snapshot])
+  }
+
+  func testCacheLoadsSnapshotsFromFallbackURLWhenPrimaryIsMissing() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let primaryURL = directory.appendingPathComponent("primary/usage.json")
+    let fallbackURL = directory.appendingPathComponent("fallback/usage.json")
+    let cache = CodexUsageCache(cacheURL: primaryURL, fallbackCacheURL: fallbackURL)
+    let snapshot = CodexUsageSnapshot(
+      provider: CodexUsageProviderID.openRouter.rawValue,
+      fetchedAt: Date(timeIntervalSince1970: 0),
+      fiveHour: CodexUsageWindow(label: "Key usage", remainingPercent: 100, resetAt: nil),
+      weekly: CodexUsageWindow(label: "Credits", remainingPercent: 34, resetAt: nil),
+      accountID: "default",
+      accountLabel: "Personal"
+    )
+    try FileManager.default.createDirectory(
+      at: fallbackURL.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+    try JSONEncoder.codexMonitor.encode([snapshot]).write(to: fallbackURL)
+
+    XCTAssertEqual(try cache.loadSnapshots(), [snapshot])
+  }
+
+  func testSettingsStoreMirrorsSettingsToFallbackURL() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let primaryURL = directory.appendingPathComponent("primary/settings.json")
+    let fallbackURL = directory.appendingPathComponent("fallback/settings.json")
+    let store = CodexSettingsStore(settingsURL: primaryURL, fallbackSettingsURL: fallbackURL)
+    let settings = CodexMonitorSettings(
+      refreshIntervalMinutes: 5,
+      enabledProviders: [.openRouter],
+      openRouterAPIKeyDescriptors: [
+        OpenRouterAPIKeyDescriptor(id: "default", label: "Personal")
+      ]
+    )
+
+    try store.save(settings)
+
+    XCTAssertEqual(CodexSettingsStore(settingsURL: primaryURL).loadIfPresent(), settings)
+    XCTAssertEqual(CodexSettingsStore(settingsURL: fallbackURL).loadIfPresent(), settings)
+  }
+
+  func testSettingsStoreLoadsSettingsFromFallbackURLWhenPrimaryIsMissing() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let primaryURL = directory.appendingPathComponent("primary/settings.json")
+    let fallbackURL = directory.appendingPathComponent("fallback/settings.json")
+    let store = CodexSettingsStore(settingsURL: primaryURL, fallbackSettingsURL: fallbackURL)
+    let settings = CodexMonitorSettings(
+      refreshIntervalMinutes: 5,
+      enabledProviders: [.openRouter],
+      openRouterAPIKeyDescriptors: [
+        OpenRouterAPIKeyDescriptor(id: "default", label: "Personal")
+      ]
+    )
+    try FileManager.default.createDirectory(
+      at: fallbackURL.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+    try JSONEncoder.codexMonitor.encode(settings).write(to: fallbackURL)
+
+    XCTAssertEqual(store.loadIfPresent(), settings)
   }
 
   func testExtractsClaudeCodeUsageFromNewestProjectSessionTails() throws {

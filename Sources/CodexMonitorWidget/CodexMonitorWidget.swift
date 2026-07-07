@@ -273,16 +273,24 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
     appendProvider(providerID, to: &snapshotProviderIDs)
     let snapshots = allSnapshots.filteringProviders(snapshotProviderIDs)
     let openRouterKeyLabel = resolvedOpenRouterKeyLabel(configuration: configuration, snapshots: snapshots)
+    var snapshot = cachedSnapshot(
+      providerID: providerID,
+      snapshots: snapshots,
+      openRouterKeyID: configuration.openRouterKeyID,
+      openRouterKeyLabel: openRouterKeyLabel
+    )
+    if snapshot == nil, refreshFromAPI {
+      snapshot = await fetchOpenRouterSnapshot(
+        providerID: providerID,
+        configuration: configuration,
+        openRouterKeyLabel: openRouterKeyLabel
+      )
+    }
     return CodexUsageEntry(
       date: date,
       nextRefreshAt: settings.nextRefreshDate(after: date),
       providerID: providerID,
-      snapshots: cachedSnapshot(
-        providerID: providerID,
-        snapshots: snapshots,
-        openRouterKeyID: configuration.openRouterKeyID,
-        openRouterKeyLabel: openRouterKeyLabel
-      ).map { [$0] } ?? [],
+      snapshots: snapshot.map { [$0] } ?? [],
       openRouterKeyLabel: openRouterKeyLabel,
       hideOpenRouterKeyUsage: !configuration.showsOpenRouterKeyUsageEffective,
       hideOpenRouterCredits: !configuration.showsOpenRouterCreditsEffective
@@ -388,6 +396,65 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
     return providerSnapshots.first { snapshot in
       snapshot.matchesOpenRouterWidgetKey(id: openRouterKeyID, label: openRouterKeyLabel)
     } ?? providerSnapshots.first
+  }
+
+  private func fetchOpenRouterSnapshot(
+    providerID: CodexUsageProviderID,
+    configuration: CodexWidgetConfigurationIntent,
+    openRouterKeyLabel: String?
+  ) async -> CodexUsageSnapshot? {
+    guard providerID == .openRouter,
+      let credential = openRouterCredential(
+        id: configuration.openRouterKeyID,
+        label: openRouterKeyLabel ?? configuration.openRouterKeyLabel
+      )
+    else {
+      return nil
+    }
+    return try? await OpenRouterUsageClient(timeout: 10).fetchUsage(
+      apiKey: credential.apiKey,
+      accountID: credential.id,
+      accountLabel: credential.label
+    )
+  }
+
+  private func openRouterCredential(id: String?, label: String?) -> OpenRouterAPIKeyCredential? {
+    let credentials = (try? OpenRouterAPIKeyStore().loadAPIKeys()) ?? []
+    if let id = nonEmpty(id),
+      let credential = credentials.first(where: { credential in
+        credentialMatchesOpenRouterWidgetKey(credential, id: id, label: nil)
+      })
+    {
+      return credential
+    }
+    if let label = nonEmpty(label),
+      let credential = credentials.first(where: { credential in
+        credentialMatchesOpenRouterWidgetKey(credential, id: nil, label: label)
+      })
+    {
+      return credential
+    }
+    return credentials.first
+  }
+
+  private func credentialMatchesOpenRouterWidgetKey(
+    _ credential: OpenRouterAPIKeyCredential,
+    id: String?,
+    label: String?
+  ) -> Bool {
+    if let id = nonEmpty(id) {
+      let candidateIDs = [credential.id, credential.label].flatMap { value in
+        [value, "\(CodexUsageProviderID.openRouter.rawValue):\(value)"]
+      }
+      if candidateIDs.contains(where: { $0.caseInsensitiveCompare(id) == .orderedSame }) {
+        return true
+      }
+    }
+
+    guard let label = nonEmpty(label) else {
+      return false
+    }
+    return credential.label.caseInsensitiveCompare(label) == .orderedSame
   }
 
   private func resolvedOpenRouterKeyLabel(

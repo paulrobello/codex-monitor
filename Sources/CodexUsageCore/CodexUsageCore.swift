@@ -1963,11 +1963,21 @@ public enum CodexRefreshText {
 
 public final class CodexUsageCache: @unchecked Sendable {
   private let fileManager: FileManager
+  private let fallbackCacheURL: URL?
   public let cacheURL: URL
 
-  public init(fileManager: FileManager = .default, cacheURL: URL? = nil) {
+  public convenience init(fileManager: FileManager = .default, cacheURL: URL? = nil) {
+    let resolvedCacheURL = cacheURL ?? Self.defaultCacheURL(fileManager: fileManager)
+    let fallbackCacheURL = cacheURL == nil
+      ? Self.defaultFallbackCacheURL(fileManager: fileManager, primaryURL: resolvedCacheURL)
+      : nil
+    self.init(fileManager: fileManager, cacheURL: resolvedCacheURL, fallbackCacheURL: fallbackCacheURL)
+  }
+
+  init(fileManager: FileManager = .default, cacheURL: URL, fallbackCacheURL: URL?) {
     self.fileManager = fileManager
-    self.cacheURL = cacheURL ?? Self.defaultCacheURL(fileManager: fileManager)
+    self.cacheURL = cacheURL
+    self.fallbackCacheURL = fallbackCacheURL
   }
 
   public func loadSnapshot() throws -> CodexUsageSnapshot? {
@@ -1975,10 +1985,29 @@ public final class CodexUsageCache: @unchecked Sendable {
   }
 
   public func loadSnapshots() throws -> [CodexUsageSnapshot] {
-    guard fileManager.fileExists(atPath: cacheURL.path) else {
+    if fileManager.fileExists(atPath: cacheURL.path) {
+      do {
+        return try loadSnapshots(from: cacheURL)
+      } catch {
+        if let fallbackCacheURL,
+          fileManager.fileExists(atPath: fallbackCacheURL.path),
+          let fallbackSnapshots = try? loadSnapshots(from: fallbackCacheURL)
+        {
+          return fallbackSnapshots
+        }
+        throw error
+      }
+    }
+    guard let fallbackCacheURL,
+      fileManager.fileExists(atPath: fallbackCacheURL.path)
+    else {
       return []
     }
-    let data = try Data(contentsOf: cacheURL)
+    return try loadSnapshots(from: fallbackCacheURL)
+  }
+
+  private func loadSnapshots(from url: URL) throws -> [CodexUsageSnapshot] {
+    let data = try Data(contentsOf: url)
     if let snapshots = try? JSONDecoder.codexMonitor.decode([CodexUsageSnapshot].self, from: data) {
       return snapshots
     }
@@ -1990,10 +2019,17 @@ public final class CodexUsageCache: @unchecked Sendable {
   }
 
   public func save(snapshots: [CodexUsageSnapshot]) throws {
+    try save(snapshots: snapshots, to: cacheURL)
+    if let fallbackCacheURL {
+      try? save(snapshots: snapshots, to: fallbackCacheURL)
+    }
+  }
+
+  private func save(snapshots: [CodexUsageSnapshot], to url: URL) throws {
     try fileManager.createDirectory(
-      at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+      at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     let data = try JSONEncoder.codexMonitor.encode(snapshots)
-    try data.write(to: cacheURL, options: [.atomic])
+    try data.write(to: url, options: [.atomic])
   }
 
   public static func defaultCacheURL(fileManager: FileManager = .default) -> URL {
@@ -2006,6 +2042,23 @@ public final class CodexUsageCache: @unchecked Sendable {
       CodexMonitorStorage
       .supportDirectory(fileManager: fileManager)
       .appendingPathComponent("usage.json")
+  }
+
+  public static func legacyCacheURL(fileManager: FileManager = .default) -> URL {
+    CodexMonitorStorage
+      .legacySupportDirectory(fileManager: fileManager)
+      .appendingPathComponent("usage.json")
+  }
+
+  private static func defaultFallbackCacheURL(fileManager: FileManager, primaryURL: URL) -> URL? {
+    guard ProcessInfo.processInfo.environment["CODEX_MONITOR_CACHE_PATH"]?.isEmpty ?? true else {
+      return nil
+    }
+    let legacyURL = legacyCacheURL(fileManager: fileManager)
+    guard legacyURL.standardizedFileURL.path != primaryURL.standardizedFileURL.path else {
+      return nil
+    }
+    return legacyURL
   }
 }
 
@@ -2160,11 +2213,21 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
 
 public final class CodexSettingsStore: @unchecked Sendable {
   private let fileManager: FileManager
+  private let fallbackSettingsURL: URL?
   public let settingsURL: URL
 
-  public init(fileManager: FileManager = .default, settingsURL: URL? = nil) {
+  public convenience init(fileManager: FileManager = .default, settingsURL: URL? = nil) {
+    let resolvedSettingsURL = settingsURL ?? Self.defaultSettingsURL(fileManager: fileManager)
+    let fallbackSettingsURL = settingsURL == nil
+      ? Self.defaultFallbackSettingsURL(fileManager: fileManager, primaryURL: resolvedSettingsURL)
+      : nil
+    self.init(fileManager: fileManager, settingsURL: resolvedSettingsURL, fallbackSettingsURL: fallbackSettingsURL)
+  }
+
+  init(fileManager: FileManager = .default, settingsURL: URL, fallbackSettingsURL: URL?) {
     self.fileManager = fileManager
-    self.settingsURL = settingsURL ?? Self.defaultSettingsURL(fileManager: fileManager)
+    self.settingsURL = settingsURL
+    self.fallbackSettingsURL = fallbackSettingsURL
   }
 
   public func load() -> CodexMonitorSettings {
@@ -2172,8 +2235,18 @@ public final class CodexSettingsStore: @unchecked Sendable {
   }
 
   public func loadIfPresent() -> CodexMonitorSettings? {
-    guard fileManager.fileExists(atPath: settingsURL.path),
-      let data = try? Data(contentsOf: settingsURL),
+    if let settings = load(from: settingsURL) {
+      return settings
+    }
+    guard let fallbackSettingsURL else {
+      return nil
+    }
+    return load(from: fallbackSettingsURL)
+  }
+
+  private func load(from url: URL) -> CodexMonitorSettings? {
+    guard fileManager.fileExists(atPath: url.path),
+      let data = try? Data(contentsOf: url),
       let settings = try? JSONDecoder.codexMonitor.decode(CodexMonitorSettings.self, from: data)
     else {
       return nil
@@ -2191,10 +2264,17 @@ public final class CodexSettingsStore: @unchecked Sendable {
   }
 
   public func save(_ settings: CodexMonitorSettings) throws {
+    try save(settings, to: settingsURL)
+    if let fallbackSettingsURL {
+      try? save(settings, to: fallbackSettingsURL)
+    }
+  }
+
+  private func save(_ settings: CodexMonitorSettings, to url: URL) throws {
     try fileManager.createDirectory(
-      at: settingsURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+      at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     let data = try JSONEncoder.codexMonitor.encode(settings)
-    try data.write(to: settingsURL, options: [.atomic])
+    try data.write(to: url, options: [.atomic])
   }
 
   public static func defaultSettingsURL(fileManager: FileManager = .default) -> URL {
@@ -2207,6 +2287,23 @@ public final class CodexSettingsStore: @unchecked Sendable {
       CodexMonitorStorage
       .supportDirectory(fileManager: fileManager)
       .appendingPathComponent("settings.json")
+  }
+
+  public static func legacySettingsURL(fileManager: FileManager = .default) -> URL {
+    CodexMonitorStorage
+      .legacySupportDirectory(fileManager: fileManager)
+      .appendingPathComponent("settings.json")
+  }
+
+  private static func defaultFallbackSettingsURL(fileManager: FileManager, primaryURL: URL) -> URL? {
+    guard ProcessInfo.processInfo.environment["CODEX_MONITOR_SETTINGS_PATH"]?.isEmpty ?? true else {
+      return nil
+    }
+    let legacyURL = legacySettingsURL(fileManager: fileManager)
+    guard legacyURL.standardizedFileURL.path != primaryURL.standardizedFileURL.path else {
+      return nil
+    }
+    return legacyURL
   }
 }
 
