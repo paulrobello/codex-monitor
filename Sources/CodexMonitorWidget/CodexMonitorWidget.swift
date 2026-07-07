@@ -128,7 +128,7 @@ struct CodexWidgetConfigurationIntent: WidgetConfigurationIntent {
   var openRouterKey: OpenRouterWidgetKeyChoice?
 
   init() {
-    self.provider = .openAICodex
+    self.provider = nil
     self.showsOpenRouterKeyUsage = true
     self.showsOpenRouterCredits = true
     self.openRouterKey = nil
@@ -141,8 +141,8 @@ struct CodexWidgetConfigurationIntent: WidgetConfigurationIntent {
     self.openRouterKey = nil
   }
 
-  var providerID: CodexUsageProviderID {
-    provider?.providerID ?? .openAICodex
+  var providerID: CodexUsageProviderID? {
+    provider?.providerID
   }
 
   var openRouterKeyID: String? {
@@ -232,7 +232,8 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
       return .openRouter
     }
     let configuredProviderID = configuration.providerID
-    if settings.enabledProviders.contains(configuredProviderID),
+    if let configuredProviderID,
+      settings.enabledProviders.contains(configuredProviderID),
       snapshots.contains(where: { $0.provider == configuredProviderID.rawValue })
     {
       return configuredProviderID
@@ -240,7 +241,7 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
     let providerWithCachedSnapshot = settings.enabledProviders.first { providerID in
       snapshots.contains(where: { $0.provider == providerID.rawValue })
     }
-    return providerWithCachedSnapshot ?? settings.enabledProviders.first ?? configuredProviderID
+    return providerWithCachedSnapshot ?? settings.enabledProviders.first ?? configuredProviderID ?? .openRouter
   }
 
   private func countdownEntries(from entry: CodexUsageEntry) -> [CodexUsageEntry] {

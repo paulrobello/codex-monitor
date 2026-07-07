@@ -753,12 +753,14 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("private func effectiveProviderID("))
     XCTAssertTrue(widgetSource.contains("if configuration.openRouterKeyID != nil {"))
     XCTAssertTrue(widgetSource.contains("return .openRouter"))
+    XCTAssertTrue(widgetSource.contains("let configuredProviderID = configuration.providerID"))
+    XCTAssertTrue(widgetSource.contains("if let configuredProviderID,"))
     XCTAssertTrue(widgetSource.contains("settings.enabledProviders.contains(configuredProviderID)"))
     XCTAssertTrue(widgetSource.contains("snapshots.contains(where: { $0.provider == configuredProviderID.rawValue })"))
     XCTAssertTrue(widgetSource.contains("let providerWithCachedSnapshot = settings.enabledProviders.first { providerID in"))
     XCTAssertTrue(widgetSource.contains("snapshots.contains(where: { $0.provider == providerID.rawValue })"))
     XCTAssertTrue(
-      widgetSource.contains("return providerWithCachedSnapshot ?? settings.enabledProviders.first ?? configuredProviderID"))
+      widgetSource.contains("return providerWithCachedSnapshot ?? settings.enabledProviders.first ?? configuredProviderID ?? .openRouter"))
   }
 
   func testIOSWidgetProviderPickerExcludesClaudeCode() throws {
@@ -970,6 +972,10 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("@Parameter(title: \"Show Key Usage\", default: true)"))
     XCTAssertTrue(widgetSource.contains("@Parameter(title: \"Show Credits\", default: true)"))
     XCTAssertTrue(widgetSource.contains("@Parameter(title: \"OpenRouter Key\")"))
+    XCTAssertTrue(widgetSource.contains("self.provider = nil"))
+    XCTAssertFalse(widgetSource.contains("self.provider = .openAICodex"))
+    XCTAssertTrue(widgetSource.contains("var providerID: CodexUsageProviderID?"))
+    XCTAssertFalse(widgetSource.contains("provider?.providerID ?? .openAICodex"))
     XCTAssertTrue(widgetSource.contains("var showsOpenRouterKeyUsage: Bool?"))
     XCTAssertTrue(widgetSource.contains("var showsOpenRouterCredits: Bool?"))
     XCTAssertTrue(widgetSource.contains("var openRouterKey: OpenRouterWidgetKeyChoice?"))
@@ -1277,7 +1283,7 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 4"))
+    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 5"))
   }
 
   func testKeychainStoresCanOmitAccessGroupForUnprovisionedCLI() throws {
