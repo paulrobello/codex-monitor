@@ -8,6 +8,7 @@ struct CodexUsageEntry: TimelineEntry {
   let nextRefreshAt: Date
   let providerID: CodexUsageProviderID
   let snapshots: [CodexUsageSnapshot]
+  let openRouterKeyLabel: String?
   let hideOpenRouterKeyUsage: Bool
   let hideOpenRouterCredits: Bool
 }
@@ -149,6 +150,10 @@ struct CodexWidgetConfigurationIntent: WidgetConfigurationIntent {
     openRouterKey?.id
   }
 
+  var openRouterKeyLabel: String? {
+    openRouterKey?.label
+  }
+
   var showsOpenRouterKeyUsageEffective: Bool {
     rawShowsOpenRouterKeyUsage || (!rawShowsOpenRouterKeyUsage && !rawShowsOpenRouterCredits)
   }
@@ -183,6 +188,7 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
             label: "wk", remainingPercent: 48, resetAt: Date().addingTimeInterval(172800))
         )
       ],
+      openRouterKeyLabel: nil,
       hideOpenRouterKeyUsage: false,
       hideOpenRouterCredits: false
     )
@@ -228,8 +234,10 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
       snapshots: cachedSnapshot(
         providerID: providerID,
         snapshots: snapshots,
-        openRouterKeyID: configuration.openRouterKeyID
+        openRouterKeyID: configuration.openRouterKeyID,
+        openRouterKeyLabel: configuration.openRouterKeyLabel
       ).map { [$0] } ?? [],
+      openRouterKeyLabel: configuration.openRouterKeyLabel,
       hideOpenRouterKeyUsage: !configuration.showsOpenRouterKeyUsageEffective,
       hideOpenRouterCredits: !configuration.showsOpenRouterCreditsEffective
     )
@@ -313,6 +321,7 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
       nextRefreshAt: entry.nextRefreshAt,
       providerID: entry.providerID,
       snapshots: entry.snapshots,
+      openRouterKeyLabel: entry.openRouterKeyLabel,
       hideOpenRouterKeyUsage: entry.hideOpenRouterKeyUsage,
       hideOpenRouterCredits: entry.hideOpenRouterCredits
     )
@@ -321,14 +330,17 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
   private func cachedSnapshot(
     providerID: CodexUsageProviderID,
     snapshots: [CodexUsageSnapshot],
-    openRouterKeyID: String?
+    openRouterKeyID: String?,
+    openRouterKeyLabel: String?
   ) -> CodexUsageSnapshot? {
     let providerSnapshots = snapshots.filter { $0.provider == providerID.rawValue }
-    guard providerID == .openRouter, let openRouterKeyID else {
+    guard providerID == .openRouter,
+      openRouterKeyID != nil || openRouterKeyLabel != nil
+    else {
       return providerSnapshots.first
     }
     return providerSnapshots.first { snapshot in
-      snapshot.openRouterWidgetKeyID == openRouterKeyID
+      snapshot.matchesOpenRouterWidgetKey(id: openRouterKeyID, label: openRouterKeyLabel)
     } ?? providerSnapshots.first
   }
 
@@ -367,12 +379,24 @@ struct CodexMonitorWidgetView: View {
           Image(systemName: "gauge.with.dots.needle.bottom.50percent")
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(.secondary)
-          Text(entry.snapshots.first?.displayName ?? entry.providerID.displayName)
-            .font(.caption.weight(.semibold))
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-            .allowsTightening(true)
-            .layoutPriority(1)
+          VStack(alignment: .leading, spacing: 1) {
+            Text(entry.providerID.displayName)
+              .font(.caption.weight(.semibold))
+              .lineLimit(1)
+              .minimumScaleFactor(0.75)
+              .allowsTightening(true)
+            if let snapshot = entry.snapshots.first,
+              let keyLabel = headerKeyLabel(for: snapshot)
+            {
+              Text(keyLabel)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .allowsTightening(true)
+            }
+          }
+          .layoutPriority(1)
           Spacer(minLength: 4)
           Self.nextRefreshLabel(for: entry.nextRefreshAt, now: entry.date)
             .font(.caption2)
@@ -415,7 +439,14 @@ struct CodexMonitorWidgetView: View {
 
   private func smallWidgetKeyLabel(for snapshot: CodexUsageSnapshot) -> String? {
     if snapshot.provider == CodexUsageProviderID.openRouter.rawValue {
-      return snapshot.openRouterWidgetKeyLabel
+      return entry.openRouterKeyLabel ?? snapshot.openRouterWidgetKeyLabel
+    }
+    return nil
+  }
+
+  private func headerKeyLabel(for snapshot: CodexUsageSnapshot) -> String? {
+    if snapshot.provider == CodexUsageProviderID.openRouter.rawValue {
+      return entry.openRouterKeyLabel ?? snapshot.openRouterWidgetKeyLabel
     }
     return nil
   }
@@ -560,6 +591,25 @@ private extension CodexUsageSnapshot {
 
   var openRouterWidgetKeyLabel: String {
     nonEmpty(accountLabel) ?? displayName
+  }
+
+  func matchesOpenRouterWidgetKey(id: String?, label: String?) -> Bool {
+    if let id = nonEmpty(id), openRouterWidgetKeyID == id {
+      return true
+    }
+
+    guard let label = nonEmpty(label) else {
+      return false
+    }
+    if openRouterWidgetKeyLabel.caseInsensitiveCompare(label) == .orderedSame {
+      return true
+    }
+    if let accountLabel = nonEmpty(accountLabel),
+      accountLabel.caseInsensitiveCompare(label) == .orderedSame
+    {
+      return true
+    }
+    return false
   }
 
   private func nonEmpty(_ value: String?) -> String? {
