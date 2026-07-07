@@ -213,12 +213,14 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
       snapshots: allSnapshots
     )
     let settings = loadedSettings ?? CodexMonitorSettings(enabledProviders: enabledProviders)
-    let snapshots = allSnapshots.filteringProviders(enabledProviders)
     let providerID = effectiveProviderID(
       configuration: configuration,
       enabledProviders: enabledProviders,
       snapshots: allSnapshots
     )
+    var snapshotProviderIDs = enabledProviders
+    appendProvider(providerID, to: &snapshotProviderIDs)
+    let snapshots = allSnapshots.filteringProviders(snapshotProviderIDs)
     return CodexUsageEntry(
       date: date,
       nextRefreshAt: settings.nextRefreshDate(after: date),

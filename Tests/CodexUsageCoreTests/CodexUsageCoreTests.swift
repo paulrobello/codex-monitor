@@ -728,7 +728,9 @@ final class CodexUsageCoreTests: XCTestCase {
 
     XCTAssertTrue(widgetSource.contains("cachedSnapshot("))
     XCTAssertTrue(widgetSource.contains("openRouterKeyID: configuration.openRouterKeyID"))
-    XCTAssertTrue(widgetSource.contains("let snapshots = allSnapshots.filteringProviders(enabledProviders)"))
+    XCTAssertTrue(widgetSource.contains("var snapshotProviderIDs = enabledProviders"))
+    XCTAssertTrue(widgetSource.contains("appendProvider(providerID, to: &snapshotProviderIDs)"))
+    XCTAssertTrue(widgetSource.contains("let snapshots = allSnapshots.filteringProviders(snapshotProviderIDs)"))
   }
 
   func testWidgetFallsBackToEnabledProviderWhenDefaultProviderIsDisabled() throws {
@@ -746,11 +748,13 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("let allSnapshots = cachedSnapshots()"))
     XCTAssertTrue(widgetSource.contains("let loadedSettings = CodexSettingsStore().loadIfPresent()"))
     XCTAssertTrue(widgetSource.contains("let enabledProviders = loadedSettings?.enabledProviders ?? fallbackProviderIDs("))
-    XCTAssertTrue(widgetSource.contains("let snapshots = allSnapshots.filteringProviders(enabledProviders)"))
     XCTAssertTrue(widgetSource.contains("let providerID = effectiveProviderID("))
     XCTAssertTrue(widgetSource.contains("configuration: configuration,"))
     XCTAssertTrue(widgetSource.contains("enabledProviders: enabledProviders,"))
     XCTAssertTrue(widgetSource.contains("snapshots: allSnapshots"))
+    XCTAssertTrue(widgetSource.contains("var snapshotProviderIDs = enabledProviders"))
+    XCTAssertTrue(widgetSource.contains("appendProvider(providerID, to: &snapshotProviderIDs)"))
+    XCTAssertTrue(widgetSource.contains("let snapshots = allSnapshots.filteringProviders(snapshotProviderIDs)"))
     XCTAssertTrue(widgetSource.contains("providerID: providerID"))
     XCTAssertTrue(widgetSource.contains("providerID: providerID,\n        snapshots: snapshots"))
     XCTAssertTrue(widgetSource.contains("private func effectiveProviderID("))
@@ -1300,7 +1304,7 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 6"))
+    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 7"))
   }
 
   func testKeychainStoresCanOmitAccessGroupForUnprovisionedCLI() throws {
