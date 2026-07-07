@@ -227,6 +227,7 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
     var snapshotProviderIDs = enabledProviders
     appendProvider(providerID, to: &snapshotProviderIDs)
     let snapshots = allSnapshots.filteringProviders(snapshotProviderIDs)
+    let openRouterKeyLabel = resolvedOpenRouterKeyLabel(configuration: configuration, snapshots: snapshots)
     return CodexUsageEntry(
       date: date,
       nextRefreshAt: settings.nextRefreshDate(after: date),
@@ -235,9 +236,9 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
         providerID: providerID,
         snapshots: snapshots,
         openRouterKeyID: configuration.openRouterKeyID,
-        openRouterKeyLabel: configuration.openRouterKeyLabel
+        openRouterKeyLabel: openRouterKeyLabel
       ).map { [$0] } ?? [],
-      openRouterKeyLabel: configuration.openRouterKeyLabel,
+      openRouterKeyLabel: openRouterKeyLabel,
       hideOpenRouterKeyUsage: !configuration.showsOpenRouterKeyUsageEffective,
       hideOpenRouterCredits: !configuration.showsOpenRouterCreditsEffective
     )
@@ -344,8 +345,40 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
     } ?? providerSnapshots.first
   }
 
+  private func resolvedOpenRouterKeyLabel(
+    configuration: CodexWidgetConfigurationIntent,
+    snapshots: [CodexUsageSnapshot]
+  ) -> String? {
+    if let label = nonEmpty(configuration.openRouterKeyLabel) {
+      return label
+    }
+    guard let openRouterKeyID = nonEmpty(configuration.openRouterKeyID) else {
+      return nil
+    }
+
+    let storedDescriptor = try? OpenRouterAPIKeyStore().loadAPIKeyDescriptors().first { descriptor in
+      descriptor.id == openRouterKeyID
+    }
+    if let label = nonEmpty(storedDescriptor?.label) {
+      return label
+    }
+
+    let cachedSnapshot = snapshots.first { snapshot in
+      snapshot.provider == CodexUsageProviderID.openRouter.rawValue
+        && snapshot.matchesOpenRouterWidgetKey(id: openRouterKeyID, label: nil)
+    }
+    return nonEmpty(cachedSnapshot?.openRouterWidgetKeyLabel)
+  }
+
   private func cachedSnapshots() -> [CodexUsageSnapshot] {
     (try? CodexUsageCache().loadSnapshots()) ?? []
+  }
+
+  private func nonEmpty(_ value: String?) -> String? {
+    guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+      return nil
+    }
+    return trimmed
   }
 }
 
@@ -368,6 +401,13 @@ struct CodexMonitorWidgetView: View {
             .font(.caption.weight(.semibold))
             .lineLimit(1)
             .minimumScaleFactor(0.75)
+          if let keyLabel = headerKeyLabel(for: entry.snapshots.first) {
+            Text(keyLabel)
+              .font(.system(size: 10, weight: .semibold))
+              .foregroundStyle(.secondary)
+              .lineLimit(1)
+              .minimumScaleFactor(0.75)
+          }
           Text("Set up in app")
             .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(.secondary)
@@ -385,9 +425,7 @@ struct CodexMonitorWidgetView: View {
               .lineLimit(1)
               .minimumScaleFactor(0.75)
               .allowsTightening(true)
-            if let snapshot = entry.snapshots.first,
-              let keyLabel = headerKeyLabel(for: snapshot)
-            {
+            if let keyLabel = headerKeyLabel(for: entry.snapshots.first) {
               Text(keyLabel)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.secondary)
@@ -444,11 +482,11 @@ struct CodexMonitorWidgetView: View {
     return nil
   }
 
-  private func headerKeyLabel(for snapshot: CodexUsageSnapshot) -> String? {
-    if snapshot.provider == CodexUsageProviderID.openRouter.rawValue {
-      return entry.openRouterKeyLabel ?? snapshot.openRouterWidgetKeyLabel
+  private func headerKeyLabel(for snapshot: CodexUsageSnapshot?) -> String? {
+    guard entry.providerID == .openRouter else {
+      return nil
     }
-    return nil
+    return entry.openRouterKeyLabel ?? snapshot?.openRouterWidgetKeyLabel
   }
 
   private func visibleWeeklyWindow(for snapshot: CodexUsageSnapshot) -> CodexUsageWindow? {

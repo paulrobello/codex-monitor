@@ -1003,15 +1003,20 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("var showsOpenRouterCreditsEffective: Bool"))
     XCTAssertTrue(widgetSource.contains("let hideOpenRouterKeyUsage: Bool"))
     XCTAssertTrue(widgetSource.contains("let hideOpenRouterCredits: Bool"))
-    XCTAssertTrue(widgetSource.contains("openRouterKeyLabel: configuration.openRouterKeyLabel"))
+    XCTAssertTrue(
+      widgetSource.contains(
+        "let openRouterKeyLabel = resolvedOpenRouterKeyLabel(configuration: configuration, snapshots: snapshots)"))
+    XCTAssertTrue(widgetSource.contains("openRouterKeyLabel: openRouterKeyLabel"))
     XCTAssertTrue(widgetSource.contains("hideOpenRouterKeyUsage: !configuration.showsOpenRouterKeyUsageEffective"))
     XCTAssertTrue(widgetSource.contains("hideOpenRouterCredits: !configuration.showsOpenRouterCreditsEffective"))
     XCTAssertTrue(widgetSource.contains("private func isOpenRouterKeyUsageLabel(_ label: String?) -> Bool"))
     XCTAssertTrue(widgetSource.contains("label == \"Key limit\" || label == \"Key usage\""))
     XCTAssertTrue(widgetSource.contains("cachedSnapshot("))
     XCTAssertTrue(widgetSource.contains("openRouterKeyID: configuration.openRouterKeyID"))
-    XCTAssertTrue(widgetSource.contains("openRouterKeyLabel: configuration.openRouterKeyLabel"))
+    XCTAssertTrue(widgetSource.contains("openRouterKeyLabel: openRouterKeyLabel"))
     XCTAssertTrue(widgetSource.contains("snapshot.matchesOpenRouterWidgetKey(id: openRouterKeyID, label: openRouterKeyLabel)"))
+    XCTAssertTrue(widgetSource.contains("private func resolvedOpenRouterKeyLabel("))
+    XCTAssertTrue(widgetSource.contains("OpenRouterAPIKeyStore().loadAPIKeyDescriptors().first"))
     XCTAssertTrue(widgetSource.contains("private func visibleWeeklyWindow(for snapshot: CodexUsageSnapshot)"))
     XCTAssertFalse(widgetSource.contains("ProgressView(value: window.remainingPercent, total: 100)"))
 
@@ -1042,9 +1047,10 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("private func smallWidgetKeyLabel(for snapshot: CodexUsageSnapshot) -> String?"))
     XCTAssertTrue(widgetSource.contains("snapshot.provider == CodexUsageProviderID.openRouter.rawValue"))
     XCTAssertTrue(widgetSource.contains("return entry.openRouterKeyLabel ?? snapshot.openRouterWidgetKeyLabel"))
-    XCTAssertTrue(widgetSource.contains("private func headerKeyLabel(for snapshot: CodexUsageSnapshot) -> String?"))
+    XCTAssertTrue(widgetSource.contains("private func headerKeyLabel(for snapshot: CodexUsageSnapshot?) -> String?"))
     XCTAssertTrue(widgetSource.contains("Text(entry.providerID.displayName)"))
-    XCTAssertTrue(widgetSource.contains("let keyLabel = headerKeyLabel(for: snapshot)"))
+    XCTAssertTrue(widgetSource.contains("if let keyLabel = headerKeyLabel(for: entry.snapshots.first)"))
+    XCTAssertTrue(widgetSource.contains("guard entry.providerID == .openRouter else"))
     XCTAssertTrue(widgetSource.contains("struct SmallWidgetUsageSummary: View"))
     XCTAssertTrue(widgetSource.contains("var keyLabel: String?"))
     XCTAssertTrue(widgetSource.contains("if let keyLabel {"))
@@ -1310,7 +1316,7 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 8"))
+    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 9"))
   }
 
   func testKeychainStoresCanOmitAccessGroupForUnprovisionedCLI() throws {
