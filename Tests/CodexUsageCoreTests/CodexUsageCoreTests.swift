@@ -981,9 +981,12 @@ final class CodexUsageCoreTests: XCTestCase {
 
     XCTAssertTrue(widgetSource.contains("if family == .systemSmall {"))
     XCTAssertTrue(widgetSource.contains("SmallWidgetUsageSummary("))
-    XCTAssertTrue(widgetSource.contains("providerName: entry.providerID.displayName"))
+    XCTAssertTrue(widgetSource.contains("providerName: smallWidgetProviderName(for: snapshot)"))
     XCTAssertTrue(widgetSource.contains("fiveHourWindow: visibleFiveHourWindow(for: snapshot)"))
     XCTAssertTrue(widgetSource.contains("weeklyWindow: visibleWeeklyWindow(for: snapshot)"))
+    XCTAssertTrue(widgetSource.contains("private func smallWidgetProviderName(for snapshot: CodexUsageSnapshot) -> String"))
+    XCTAssertTrue(widgetSource.contains("snapshot.provider == CodexUsageProviderID.openRouter.rawValue"))
+    XCTAssertTrue(widgetSource.contains("return snapshot.openRouterWidgetKeyLabel"))
     XCTAssertTrue(widgetSource.contains("struct SmallWidgetUsageSummary: View"))
     XCTAssertTrue(
       widgetSource.contains(

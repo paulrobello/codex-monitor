@@ -256,7 +256,7 @@ struct CodexMonitorWidgetView: View {
       if family == .systemSmall {
         if let snapshot = entry.snapshots.first {
           SmallWidgetUsageSummary(
-            providerName: entry.providerID.displayName,
+            providerName: smallWidgetProviderName(for: snapshot),
             fiveHourWindow: visibleFiveHourWindow(for: snapshot),
             weeklyWindow: visibleWeeklyWindow(for: snapshot))
         } else {
@@ -320,6 +320,13 @@ struct CodexMonitorWidgetView: View {
       return nil
     }
     return snapshot.fiveHour
+  }
+
+  private func smallWidgetProviderName(for snapshot: CodexUsageSnapshot) -> String {
+    if snapshot.provider == CodexUsageProviderID.openRouter.rawValue {
+      return snapshot.openRouterWidgetKeyLabel
+    }
+    return entry.providerID.displayName
   }
 
   private func visibleWeeklyWindow(for snapshot: CodexUsageSnapshot) -> CodexUsageWindow? {
