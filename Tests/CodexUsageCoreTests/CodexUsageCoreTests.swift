@@ -694,7 +694,7 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertFalse(source.contains("Text(date, style: .relative)"))
   }
 
-  func testWidgetReadsCacheOnlyAndDoesNotFetchProviderAPIs() throws {
+  func testWidgetReadsCachedUsageAndDoesNotFetchProviderAPIs() throws {
     let testFile = URL(fileURLWithPath: #filePath)
     let repositoryRoot = testFile
       .deletingLastPathComponent()
@@ -711,7 +711,6 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("CodexUsageCache().loadSnapshots()"))
     XCTAssertFalse(widgetSource.contains("fetchAndCacheSnapshot"))
     XCTAssertFalse(widgetSource.contains("UsageProviderClient().fetchUsage"))
-    XCTAssertFalse(widgetSource.contains("OpenRouterAPIKeyStore()"))
     XCTAssertFalse(widgetSource.contains("CodexAuthStore()"))
   }
 
@@ -946,6 +945,10 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("var openRouterKey: OpenRouterWidgetKeyChoice?"))
     XCTAssertTrue(widgetSource.contains("struct OpenRouterWidgetKeyChoice: AppEntity"))
     XCTAssertTrue(widgetSource.contains("struct OpenRouterWidgetKeyQuery: EntityQuery"))
+    XCTAssertTrue(widgetSource.contains("OpenRouterAPIKeyStore().loadAPIKeyDescriptors()"))
+    XCTAssertTrue(widgetSource.contains("OpenRouterWidgetKeyChoice(id: descriptor.id, label: descriptor.label)"))
+    XCTAssertTrue(widgetSource.contains("let cachedChoices = cachedOpenRouterKeyChoices()"))
+    XCTAssertTrue(widgetSource.contains("return mergeOpenRouterKeyChoices(storedChoices, cachedChoices)"))
     XCTAssertTrue(widgetSource.contains("var openRouterKeyID: String?"))
     XCTAssertTrue(widgetSource.contains("var showsOpenRouterKeyUsageEffective: Bool"))
     XCTAssertTrue(widgetSource.contains("var showsOpenRouterCreditsEffective: Bool"))

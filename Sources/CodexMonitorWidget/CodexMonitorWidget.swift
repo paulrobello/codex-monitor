@@ -72,6 +72,15 @@ struct OpenRouterWidgetKeyQuery: EntityQuery {
   }
 
   private func openRouterKeyChoices() -> [OpenRouterWidgetKeyChoice] {
+    let storedChoices = ((try? OpenRouterAPIKeyStore().loadAPIKeyDescriptors()) ?? [])
+      .map { descriptor in
+        OpenRouterWidgetKeyChoice(id: descriptor.id, label: descriptor.label)
+      }
+    let cachedChoices = cachedOpenRouterKeyChoices()
+    return mergeOpenRouterKeyChoices(storedChoices, cachedChoices)
+  }
+
+  private func cachedOpenRouterKeyChoices() -> [OpenRouterWidgetKeyChoice] {
     let snapshots = (try? CodexUsageCache().loadSnapshots()) ?? []
     var seenIDs = Set<String>()
     return snapshots.compactMap { snapshot in
@@ -84,6 +93,21 @@ struct OpenRouterWidgetKeyQuery: EntityQuery {
       }
       return OpenRouterWidgetKeyChoice(id: id, label: snapshot.openRouterWidgetKeyLabel)
     }
+  }
+
+  private func mergeOpenRouterKeyChoices(
+    _ storedChoices: [OpenRouterWidgetKeyChoice],
+    _ cachedChoices: [OpenRouterWidgetKeyChoice]
+  ) -> [OpenRouterWidgetKeyChoice] {
+    var seenIDs = Set<String>()
+    var choices: [OpenRouterWidgetKeyChoice] = []
+    for choice in storedChoices + cachedChoices {
+      guard seenIDs.insert(choice.id).inserted else {
+        continue
+      }
+      choices.append(choice)
+    }
+    return choices
   }
 }
 
