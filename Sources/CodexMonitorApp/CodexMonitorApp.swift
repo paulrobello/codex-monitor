@@ -307,7 +307,8 @@ final class UsageStore: ObservableObject {
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
       hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
-      hideOpenRouterCredits: settings.hideOpenRouterCredits
+      hideOpenRouterCredits: settings.hideOpenRouterCredits,
+      openRouterAPIKeyDescriptors: settings.openRouterAPIKeyDescriptors
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
     nextRefreshAt = nextSettings.nextRefreshDate(after: Date())
@@ -329,7 +330,8 @@ final class UsageStore: ObservableObject {
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
       hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
-      hideOpenRouterCredits: settings.hideOpenRouterCredits
+      hideOpenRouterCredits: settings.hideOpenRouterCredits,
+      openRouterAPIKeyDescriptors: settings.openRouterAPIKeyDescriptors
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
     WidgetCenter.shared.reloadAllTimelines()
@@ -346,7 +348,8 @@ final class UsageStore: ObservableObject {
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
       hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
-      hideOpenRouterCredits: settings.hideOpenRouterCredits
+      hideOpenRouterCredits: settings.hideOpenRouterCredits,
+      openRouterAPIKeyDescriptors: settings.openRouterAPIKeyDescriptors
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
   }
@@ -359,7 +362,8 @@ final class UsageStore: ObservableObject {
       beaconAPIPort: port,
       beaconProviderColors: settings.beaconProviderColors,
       hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
-      hideOpenRouterCredits: settings.hideOpenRouterCredits
+      hideOpenRouterCredits: settings.hideOpenRouterCredits,
+      openRouterAPIKeyDescriptors: settings.openRouterAPIKeyDescriptors
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
   }
@@ -374,7 +378,8 @@ final class UsageStore: ObservableObject {
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: providerColors,
       hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
-      hideOpenRouterCredits: settings.hideOpenRouterCredits
+      hideOpenRouterCredits: settings.hideOpenRouterCredits,
+      openRouterAPIKeyDescriptors: settings.openRouterAPIKeyDescriptors
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
   }
@@ -389,7 +394,8 @@ final class UsageStore: ObservableObject {
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
       hideOpenRouterKeyUsage: hideKeyUsage,
-      hideOpenRouterCredits: hideCredits
+      hideOpenRouterCredits: hideCredits,
+      openRouterAPIKeyDescriptors: settings.openRouterAPIKeyDescriptors
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
     WidgetCenter.shared.reloadAllTimelines()
@@ -405,7 +411,8 @@ final class UsageStore: ObservableObject {
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
       hideOpenRouterKeyUsage: hideKeyUsage,
-      hideOpenRouterCredits: hideCredits
+      hideOpenRouterCredits: hideCredits,
+      openRouterAPIKeyDescriptors: settings.openRouterAPIKeyDescriptors
     )
     saveSettingsAndApplyBeaconAPI(nextSettings)
     WidgetCenter.shared.reloadAllTimelines()
@@ -485,8 +492,25 @@ final class UsageStore: ObservableObject {
   }
 
   private func refreshOpenRouterAPIKeyState() {
-    openRouterAPIKeys = (try? openRouterAPIKeyStore.loadAPIKeyDescriptors()) ?? []
-    hasOpenRouterAPIKey = !openRouterAPIKeys.isEmpty
+    let descriptors = (try? openRouterAPIKeyStore.loadAPIKeyDescriptors()) ?? []
+    openRouterAPIKeys = descriptors
+    hasOpenRouterAPIKey = !descriptors.isEmpty
+    let nextSettings = CodexMonitorSettings(
+      refreshIntervalMinutes: settings.refreshIntervalMinutes,
+      enabledProviders: settings.enabledProviders,
+      beaconAPIEnabled: settings.beaconAPIEnabled,
+      beaconAPIPort: settings.beaconAPIPort,
+      beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
+      hideOpenRouterCredits: settings.hideOpenRouterCredits,
+      openRouterAPIKeyDescriptors: descriptors
+    )
+    do {
+      try settingsStore.save(nextSettings)
+      settings = nextSettings
+    } catch {
+      errorMessage = error.localizedDescription
+    }
   }
 
   private func restartRefreshLoop(runImmediately: Bool) {

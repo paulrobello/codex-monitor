@@ -73,12 +73,15 @@ struct OpenRouterWidgetKeyQuery: EntityQuery {
   }
 
   private func openRouterKeyChoices() -> [OpenRouterWidgetKeyChoice] {
+    let settingsChoices = CodexSettingsStore().loadIfPresent()?.openRouterAPIKeyDescriptors.map { descriptor in
+      OpenRouterWidgetKeyChoice(id: descriptor.id, label: descriptor.label)
+    } ?? []
     let storedChoices = ((try? OpenRouterAPIKeyStore().loadAPIKeyDescriptors()) ?? [])
       .map { descriptor in
         OpenRouterWidgetKeyChoice(id: descriptor.id, label: descriptor.label)
       }
     let cachedChoices = cachedOpenRouterKeyChoices()
-    return mergeOpenRouterKeyChoices(storedChoices, cachedChoices)
+    return mergeOpenRouterKeyChoices(settingsChoices, storedChoices, cachedChoices)
   }
 
   private func cachedOpenRouterKeyChoices() -> [OpenRouterWidgetKeyChoice] {
@@ -97,12 +100,13 @@ struct OpenRouterWidgetKeyQuery: EntityQuery {
   }
 
   private func mergeOpenRouterKeyChoices(
+    _ settingsChoices: [OpenRouterWidgetKeyChoice],
     _ storedChoices: [OpenRouterWidgetKeyChoice],
     _ cachedChoices: [OpenRouterWidgetKeyChoice]
   ) -> [OpenRouterWidgetKeyChoice] {
     var seenIDs = Set<String>()
     var choices: [OpenRouterWidgetKeyChoice] = []
-    for choice in storedChoices + cachedChoices {
+    for choice in settingsChoices + storedChoices + cachedChoices {
       guard seenIDs.insert(choice.id).inserted else {
         continue
       }
@@ -354,6 +358,13 @@ struct CodexUsageProvider: AppIntentTimelineProvider {
     }
     guard let openRouterKeyID = nonEmpty(configuration.openRouterKeyID) else {
       return nil
+    }
+
+    let settingsDescriptor = CodexSettingsStore().loadIfPresent()?.openRouterAPIKeyDescriptors.first { descriptor in
+      descriptor.id == openRouterKeyID
+    }
+    if let label = nonEmpty(settingsDescriptor?.label) {
+      return label
     }
 
     let storedDescriptor = try? OpenRouterAPIKeyStore().loadAPIKeyDescriptors().first { descriptor in

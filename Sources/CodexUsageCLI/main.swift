@@ -55,7 +55,8 @@ struct CodexUsageCLI {
             beaconAPIPort: currentSettings.beaconAPIPort,
             beaconProviderColors: currentSettings.beaconProviderColors,
             hideOpenRouterKeyUsage: currentSettings.hideOpenRouterKeyUsage,
-            hideOpenRouterCredits: currentSettings.hideOpenRouterCredits
+            hideOpenRouterCredits: currentSettings.hideOpenRouterCredits,
+            openRouterAPIKeyDescriptors: currentSettings.openRouterAPIKeyDescriptors
           )
           try settingsStore.save(settings)
           print("Usage refresh interval set to \(settings.refreshIntervalMinutes) minutes.")
@@ -85,7 +86,8 @@ struct CodexUsageCLI {
             beaconAPIPort: settings.beaconAPIPort,
             beaconProviderColors: settings.beaconProviderColors,
             hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
-            hideOpenRouterCredits: settings.hideOpenRouterCredits
+            hideOpenRouterCredits: settings.hideOpenRouterCredits,
+            openRouterAPIKeyDescriptors: settings.openRouterAPIKeyDescriptors
           )
           try settingsStore.save(nextSettings)
           print(nextSettings.enabledProviders.map(\.rawValue).joined(separator: ","))
@@ -104,7 +106,8 @@ struct CodexUsageCLI {
             beaconAPIPort: settings.beaconAPIPort,
             beaconProviderColors: settings.beaconProviderColors,
             hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
-            hideOpenRouterCredits: settings.hideOpenRouterCredits
+            hideOpenRouterCredits: settings.hideOpenRouterCredits,
+            openRouterAPIKeyDescriptors: settings.openRouterAPIKeyDescriptors
           )
           try settingsStore.save(nextSettings)
           print(enabled ? "on" : "off")

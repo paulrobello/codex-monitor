@@ -148,6 +148,19 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(decoded.beaconAccentColor(for: .openRouter), CodexUsageProviderID.openRouter.beaconAccentColor)
   }
 
+  func testMonitorSettingsPersistOpenRouterKeyDescriptorsForWidgets() throws {
+    let descriptors = [
+      OpenRouterAPIKeyDescriptor(id: "personal-key", label: "Personal"),
+      OpenRouterAPIKeyDescriptor(id: "work-key", label: "Work", isEnvironment: true),
+    ]
+    let settings = CodexMonitorSettings(openRouterAPIKeyDescriptors: descriptors)
+
+    let data = try JSONEncoder.codexMonitor.encode(settings)
+    let decoded = try JSONDecoder.codexMonitor.decode(CodexMonitorSettings.self, from: data)
+
+    XCTAssertEqual(decoded.openRouterAPIKeyDescriptors, descriptors)
+  }
+
   func testMonitorSettingsPersistOpenRouterCreditsVisibility() throws {
     let settings = CodexMonitorSettings(hideOpenRouterCredits: true)
 
@@ -994,10 +1007,11 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("var openRouterKey: OpenRouterWidgetKeyChoice?"))
     XCTAssertTrue(widgetSource.contains("struct OpenRouterWidgetKeyChoice: AppEntity"))
     XCTAssertTrue(widgetSource.contains("struct OpenRouterWidgetKeyQuery: EntityQuery"))
+    XCTAssertTrue(widgetSource.contains("let settingsChoices = CodexSettingsStore().loadIfPresent()?.openRouterAPIKeyDescriptors.map"))
     XCTAssertTrue(widgetSource.contains("OpenRouterAPIKeyStore().loadAPIKeyDescriptors()"))
     XCTAssertTrue(widgetSource.contains("OpenRouterWidgetKeyChoice(id: descriptor.id, label: descriptor.label)"))
     XCTAssertTrue(widgetSource.contains("let cachedChoices = cachedOpenRouterKeyChoices()"))
-    XCTAssertTrue(widgetSource.contains("return mergeOpenRouterKeyChoices(storedChoices, cachedChoices)"))
+    XCTAssertTrue(widgetSource.contains("return mergeOpenRouterKeyChoices(settingsChoices, storedChoices, cachedChoices)"))
     XCTAssertTrue(widgetSource.contains("var openRouterKeyID: String?"))
     XCTAssertTrue(widgetSource.contains("var showsOpenRouterKeyUsageEffective: Bool"))
     XCTAssertTrue(widgetSource.contains("var showsOpenRouterCreditsEffective: Bool"))
@@ -1016,6 +1030,7 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("openRouterKeyLabel: openRouterKeyLabel"))
     XCTAssertTrue(widgetSource.contains("snapshot.matchesOpenRouterWidgetKey(id: openRouterKeyID, label: openRouterKeyLabel)"))
     XCTAssertTrue(widgetSource.contains("private func resolvedOpenRouterKeyLabel("))
+    XCTAssertTrue(widgetSource.contains("CodexSettingsStore().loadIfPresent()?.openRouterAPIKeyDescriptors.first"))
     XCTAssertTrue(widgetSource.contains("OpenRouterAPIKeyStore().loadAPIKeyDescriptors().first"))
     XCTAssertTrue(widgetSource.contains("private func visibleWeeklyWindow(for snapshot: CodexUsageSnapshot)"))
     XCTAssertFalse(widgetSource.contains("ProgressView(value: window.remainingPercent, total: 100)"))
@@ -1316,7 +1331,7 @@ final class CodexUsageCoreTests: XCTestCase {
       encoding: .utf8
     )
 
-    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 9"))
+    XCTAssertTrue(project.contains("CURRENT_PROJECT_VERSION: 10"))
   }
 
   func testKeychainStoresCanOmitAccessGroupForUnprovisionedCLI() throws {

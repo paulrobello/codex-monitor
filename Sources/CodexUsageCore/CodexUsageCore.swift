@@ -75,7 +75,7 @@ public struct CodexUsageSnapshot: Codable, Equatable, Sendable {
   }
 }
 
-public struct OpenRouterAPIKeyDescriptor: Equatable, Sendable, Identifiable {
+public struct OpenRouterAPIKeyDescriptor: Codable, Equatable, Sendable, Identifiable {
   public var id: String
   public var label: String
   public var isEnvironment: Bool
@@ -2021,6 +2021,7 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
   public var beaconProviderColors: [String: BeaconRGB]
   public var hideOpenRouterKeyUsage: Bool
   public var hideOpenRouterCredits: Bool
+  public var openRouterAPIKeyDescriptors: [OpenRouterAPIKeyDescriptor]
 
   public init(
     refreshIntervalMinutes: Int = Self.defaultRefreshIntervalMinutes,
@@ -2029,7 +2030,8 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
     beaconAPIPort: Int = Self.defaultBeaconAPIPort,
     beaconProviderColors: [String: BeaconRGB] = [:],
     hideOpenRouterKeyUsage: Bool = false,
-    hideOpenRouterCredits: Bool = false
+    hideOpenRouterCredits: Bool = false,
+    openRouterAPIKeyDescriptors: [OpenRouterAPIKeyDescriptor] = []
   ) {
     self.refreshIntervalMinutes = Self.normalizedRefreshIntervalMinutes(refreshIntervalMinutes)
     self.enabledProviders = Self.normalizedEnabledProviders(enabledProviders)
@@ -2038,6 +2040,7 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
     self.beaconProviderColors = Self.normalizedBeaconProviderColors(beaconProviderColors)
     self.hideOpenRouterKeyUsage = hideOpenRouterKeyUsage && !hideOpenRouterCredits
     self.hideOpenRouterCredits = hideOpenRouterCredits
+    self.openRouterAPIKeyDescriptors = Self.normalizedOpenRouterAPIKeyDescriptors(openRouterAPIKeyDescriptors)
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -2048,6 +2051,7 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
     case beaconProviderColors
     case hideOpenRouterKeyUsage
     case hideOpenRouterCredits
+    case openRouterAPIKeyDescriptors
   }
 
   public init(from decoder: Decoder) throws {
@@ -2067,6 +2071,8 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
       try container.decodeIfPresent(Bool.self, forKey: .hideOpenRouterKeyUsage) ?? false
     let hideOpenRouterCredits =
       try container.decodeIfPresent(Bool.self, forKey: .hideOpenRouterCredits) ?? false
+    let openRouterAPIKeyDescriptors =
+      try container.decodeIfPresent([OpenRouterAPIKeyDescriptor].self, forKey: .openRouterAPIKeyDescriptors) ?? []
     self.init(
       refreshIntervalMinutes: refreshIntervalMinutes,
       enabledProviders: enabledProviders,
@@ -2074,7 +2080,8 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
       beaconAPIPort: beaconAPIPort,
       beaconProviderColors: beaconProviderColors,
       hideOpenRouterKeyUsage: hideOpenRouterKeyUsage,
-      hideOpenRouterCredits: hideOpenRouterCredits
+      hideOpenRouterCredits: hideOpenRouterCredits,
+      openRouterAPIKeyDescriptors: openRouterAPIKeyDescriptors
     )
   }
 
@@ -2087,6 +2094,7 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
     try container.encode(beaconProviderColors, forKey: .beaconProviderColors)
     try container.encode(hideOpenRouterKeyUsage, forKey: .hideOpenRouterKeyUsage)
     try container.encode(hideOpenRouterCredits, forKey: .hideOpenRouterCredits)
+    try container.encode(openRouterAPIKeyDescriptors, forKey: .openRouterAPIKeyDescriptors)
   }
 
   public var refreshIntervalSeconds: TimeInterval {
@@ -2125,6 +2133,26 @@ public struct CodexMonitorSettings: Codable, Equatable, Sendable {
     )
   }
 
+  public static func normalizedOpenRouterAPIKeyDescriptors(_ value: [OpenRouterAPIKeyDescriptor])
+    -> [OpenRouterAPIKeyDescriptor]
+  {
+    var normalized: [OpenRouterAPIKeyDescriptor] = []
+    var seenIDs = Set<String>()
+    for descriptor in value {
+      let id = descriptor.id.trimmingCharacters(in: .whitespacesAndNewlines)
+      let label = descriptor.label.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !id.isEmpty, !label.isEmpty, seenIDs.insert(id).inserted else {
+        continue
+      }
+      normalized.append(OpenRouterAPIKeyDescriptor(
+        id: id,
+        label: label,
+        isEnvironment: descriptor.isEnvironment
+      ))
+    }
+    return normalized
+  }
+
   public func beaconAccentColor(for provider: CodexUsageProviderID) -> BeaconRGB {
     beaconProviderColors[provider.rawValue] ?? provider.beaconAccentColor
   }
@@ -2157,7 +2185,8 @@ public final class CodexSettingsStore: @unchecked Sendable {
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
       hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
-      hideOpenRouterCredits: settings.hideOpenRouterCredits
+      hideOpenRouterCredits: settings.hideOpenRouterCredits,
+      openRouterAPIKeyDescriptors: settings.openRouterAPIKeyDescriptors
     )
   }
 

@@ -180,7 +180,8 @@ final class iOSUsageStore: ObservableObject {
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
       hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
-      hideOpenRouterCredits: settings.hideOpenRouterCredits
+      hideOpenRouterCredits: settings.hideOpenRouterCredits,
+      openRouterAPIKeyDescriptors: settings.openRouterAPIKeyDescriptors
     )
     do {
       try settingsStore.save(nextSettings)
@@ -210,7 +211,8 @@ final class iOSUsageStore: ObservableObject {
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
       hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
-      hideOpenRouterCredits: settings.hideOpenRouterCredits
+      hideOpenRouterCredits: settings.hideOpenRouterCredits,
+      openRouterAPIKeyDescriptors: settings.openRouterAPIKeyDescriptors
     )
     do {
       try settingsStore.save(nextSettings)
@@ -234,7 +236,8 @@ final class iOSUsageStore: ObservableObject {
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
       hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
-      hideOpenRouterCredits: settings.hideOpenRouterCredits
+      hideOpenRouterCredits: settings.hideOpenRouterCredits,
+      openRouterAPIKeyDescriptors: settings.openRouterAPIKeyDescriptors
     )
   }
 
@@ -259,7 +262,8 @@ final class iOSUsageStore: ObservableObject {
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
       hideOpenRouterKeyUsage: hideKeyUsage,
-      hideOpenRouterCredits: hideCredits
+      hideOpenRouterCredits: hideCredits,
+      openRouterAPIKeyDescriptors: settings.openRouterAPIKeyDescriptors
     )
     saveSettings(nextSettings)
   }
@@ -274,7 +278,8 @@ final class iOSUsageStore: ObservableObject {
       beaconAPIPort: settings.beaconAPIPort,
       beaconProviderColors: settings.beaconProviderColors,
       hideOpenRouterKeyUsage: hideKeyUsage,
-      hideOpenRouterCredits: hideCredits
+      hideOpenRouterCredits: hideCredits,
+      openRouterAPIKeyDescriptors: settings.openRouterAPIKeyDescriptors
     )
     saveSettings(nextSettings)
   }
@@ -328,8 +333,20 @@ final class iOSUsageStore: ObservableObject {
   }
 
   private func refreshOpenRouterAPIKeyState() {
-    openRouterAPIKeys = (try? openRouterAPIKeyStore.loadAPIKeyDescriptors()) ?? []
-    hasOpenRouterAPIKey = !openRouterAPIKeys.isEmpty
+    let descriptors = (try? openRouterAPIKeyStore.loadAPIKeyDescriptors()) ?? []
+    openRouterAPIKeys = descriptors
+    hasOpenRouterAPIKey = !descriptors.isEmpty
+    let nextSettings = CodexMonitorSettings(
+      refreshIntervalMinutes: settings.refreshIntervalMinutes,
+      enabledProviders: settings.enabledProviders,
+      beaconAPIEnabled: settings.beaconAPIEnabled,
+      beaconAPIPort: settings.beaconAPIPort,
+      beaconProviderColors: settings.beaconProviderColors,
+      hideOpenRouterKeyUsage: settings.hideOpenRouterKeyUsage,
+      hideOpenRouterCredits: settings.hideOpenRouterCredits,
+      openRouterAPIKeyDescriptors: descriptors
+    )
+    saveSettings(nextSettings)
   }
 
   func cancelDeviceLogin() {
