@@ -25,6 +25,28 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertEqual(snapshot.weekly?.resetAt, Date(timeIntervalSince1970: 1_800_604_800))
   }
 
+  func testParsesSingleSevenDayCodexRateLimitWindowByDuration() throws {
+    let data = Data(
+      """
+      {
+        "rate_limit": {
+          "primary_window": {
+            "used_percent": 13,
+            "limit_window_seconds": 604800,
+            "reset_at": 1784780152
+          },
+          "secondary_window": null
+        }
+      }
+      """.utf8
+    )
+
+    let snapshot = try XCTUnwrap(CodexUsageParser.parse(data: data))
+    XCTAssertNil(snapshot.fiveHour)
+    XCTAssertEqual(snapshot.weekly?.remainingPercent, 87)
+    XCTAssertEqual(snapshot.weekly?.resetAt, Date(timeIntervalSince1970: 1_784_780_152))
+  }
+
   func testRejectsPayloadWithoutUsageWindows() {
     let data = Data(#"{ "rate_limit": {} }"#.utf8)
 

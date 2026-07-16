@@ -1835,8 +1835,14 @@ public enum CodexUsageParser {
       return nil
     }
 
-    let fiveHour = parseWindow(label: "5h", value: rateLimit["primary_window"])
-    let weekly = parseWindow(label: "wk", value: rateLimit["secondary_window"])
+    let primaryWindow = rateLimit["primary_window"]
+    let secondaryWindow = rateLimit["secondary_window"]
+    let primaryIsWeekly = windowDuration(in: primaryWindow) == 7 * 24 * 60 * 60
+    let secondaryIsFiveHour = windowDuration(in: secondaryWindow) == 5 * 60 * 60
+    let fiveHour = parseWindow(
+      label: "5h", value: primaryIsWeekly || secondaryIsFiveHour ? secondaryWindow : primaryWindow)
+    let weekly = parseWindow(
+      label: "wk", value: primaryIsWeekly || secondaryIsFiveHour ? primaryWindow : secondaryWindow)
     guard fiveHour != nil || weekly != nil else {
       return nil
     }
@@ -1853,6 +1859,13 @@ public enum CodexUsageParser {
       remainingPercent: clamp(100 - usedPercent),
       resetAt: resetDate(in: record)
     )
+  }
+
+  private static func windowDuration(in value: Any?) -> Double? {
+    guard let record = value as? [String: Any] else {
+      return nil
+    }
+    return number(record["limit_window_seconds"])
   }
 
   private static func resetDate(in record: [String: Any]) -> Date? {
