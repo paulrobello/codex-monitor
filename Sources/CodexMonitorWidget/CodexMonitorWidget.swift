@@ -828,6 +828,9 @@ struct WidgetUsageRow: View {
   }
 
   private var resetText: String {
+    if forcePercentDisplay, let resetAt = window.resetAt {
+      return CodexResetText.string(resetAt: resetAt)
+    }
     if let detail = window.detail {
       return detail
     }
