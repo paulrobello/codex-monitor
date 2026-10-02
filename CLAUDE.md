@@ -25,7 +25,7 @@ make clean           # Remove build/ and CodexMonitor.xcodeproj/
 
 No linter or formatter is configured (`make lint` and `make fmt` are no-ops).
 
-iOS device builds: `make install-phone` and `make launch-phone` (targets "Pauls iPhone 17").
+iOS device builds: `make install-phone` and `make launch-phone` (targets "Pauls iPhone 18 Pro Max").
 
 Helper script: `script/build_and_run.sh` — kills existing app, installs, then supports `--debug`, `--logs`, `--telemetry`, `--verify` modes.
 

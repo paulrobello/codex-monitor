@@ -33,7 +33,7 @@ make run
 ### Install on iPhone
 
 ```bash
-make launch-phone                  # Build, install, and launch on "Pauls iPhone 17"
+make launch-phone                  # Build, install, and launch on "Pauls iPhone 18 Pro Max"
 make launch-phone PHONE_DEVICE="Your Device Name"  # Target a different device
 ```
 
