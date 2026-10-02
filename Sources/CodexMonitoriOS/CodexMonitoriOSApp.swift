@@ -762,7 +762,7 @@ struct iOSUsageWindowView: View {
         Spacer()
         Text(displayValueText)
           .font(.system(.title3, design: .rounded).weight(.semibold))
-          .foregroundStyle(tint)
+          .foregroundStyle(window.isQuotaAvailable ? tint : .secondary)
       }
       if showsProgressBar {
         UsageProgressBar(value: window.remainingPercent, tint: tint)
@@ -774,6 +774,7 @@ struct iOSUsageWindowView: View {
   }
 
   private var tint: Color {
+    guard window.isQuotaAvailable else { return .secondary }
     if window.remainingPercent < 15 {
       return .red
     }
@@ -784,6 +785,7 @@ struct iOSUsageWindowView: View {
   }
 
   private var displayValueText: String {
+    guard window.isQuotaAvailable else { return "Unavailable" }
     if forcePercentDisplay {
       return "\(Int(window.remainingPercent.rounded()))%"
     }
@@ -791,7 +793,8 @@ struct iOSUsageWindowView: View {
   }
 
   private var showsProgressBar: Bool {
-    forcePercentDisplay || window.valueText == nil || window.label.hasSuffix("limit")
+    window.isQuotaAvailable
+      && (forcePercentDisplay || window.valueText == nil || window.label.hasSuffix("limit"))
   }
 
   private var resetText: String {

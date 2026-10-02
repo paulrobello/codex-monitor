@@ -11,19 +11,24 @@ public struct CodexUsageWindow: Codable, Equatable, Sendable {
   public var resetAt: Date?
   public var detail: String?
   public var valueText: String?
+  public var quotaAvailable: Bool?
+
+  public var isQuotaAvailable: Bool { quotaAvailable != false }
 
   public init(
     label: String,
     remainingPercent: Double,
     resetAt: Date?,
     detail: String? = nil,
-    valueText: String? = nil
+    valueText: String? = nil,
+    quotaAvailable: Bool? = nil
   ) {
     self.label = label
     self.remainingPercent = remainingPercent
     self.resetAt = resetAt
     self.detail = detail
     self.valueText = valueText
+    self.quotaAvailable = quotaAvailable
   }
 }
 
@@ -1399,16 +1404,14 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
       provider: CodexUsageProviderID.claudeCode.rawValue,
       fetchedAt: now,
       fiveHour: window(
-        label: rateLimits?.fiveHourUsedPercent == nil && rateLimits?.fiveHourResetAt == nil
-          ? "5h tokens" : "5h limit",
+        label: "5h limit",
         totals: fiveHour,
         fallbackDetail: resetDetail,
         usedPercent: rateLimits?.fiveHourUsedPercent,
         resetAt: rateLimits?.fiveHourResetAt
       ),
       weekly: window(
-        label: rateLimits?.sevenDayUsedPercent == nil && rateLimits?.sevenDayResetAt == nil
-          ? "7d tokens" : "7d limit",
+        label: "7d limit",
         totals: sevenDay,
         fallbackDetail: resetDetail,
         usedPercent: rateLimits?.sevenDayUsedPercent,
@@ -1469,11 +1472,12 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
 
   private func statusSnapshot(now: Date, detail: String) -> CodexUsageSnapshot {
     let window = CodexUsageWindow(
-      label: "7d tokens",
-      remainingPercent: 100,
+      label: "7d limit",
+      remainingPercent: 0,
       resetAt: nil,
       detail: detail,
-      valueText: "0"
+      valueText: "Unavailable",
+      quotaAvailable: false
     )
     return CodexUsageSnapshot(
       provider: CodexUsageProviderID.claudeCode.rawValue,
@@ -1512,15 +1516,13 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
     resetAt: Date?,
     fallbackDetail: String?
   ) -> CodexUsageWindow? {
-    guard usedPercent != nil || resetAt != nil else {
-      return nil
-    }
     return CodexUsageWindow(
       label: label,
-      remainingPercent: remainingPercent(for: label, fromUsedPercent: usedPercent) ?? 100,
+      remainingPercent: remainingPercent(for: label, fromUsedPercent: usedPercent) ?? 0,
       resetAt: resetAt,
       detail: resetDetail(resetAt: resetAt) ?? fallbackDetail,
-      valueText: usedPercent == nil ? "Rate limit" : nil
+      valueText: usedPercent == nil ? "Unavailable" : nil,
+      quotaAvailable: usedPercent != nil
     )
   }
 
@@ -1610,10 +1612,11 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
     let secondaryDetail = resetDetail(resetAt: effectiveResetAt) ?? fallbackDetail
     return CodexUsageWindow(
       label: label,
-      remainingPercent: remainingPercent(for: label, fromUsedPercent: usedPercent) ?? 100,
+      remainingPercent: remainingPercent(for: label, fromUsedPercent: usedPercent) ?? 0,
       resetAt: effectiveResetAt,
       detail: [detail, secondaryDetail].compactMap { $0 }.joined(separator: " • "),
-      valueText: usedPercent == nil ? formatTokens(totals.totalTokens) : nil
+      valueText: usedPercent == nil ? formatTokens(totals.totalTokens) : nil,
+      quotaAvailable: usedPercent != nil
     )
   }
 
@@ -1641,21 +1644,23 @@ public final class ClaudeCodeUsageClient: @unchecked Sendable {
     guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
       return nil
     }
-    if let session = latestStatuslineSession(in: root) {
-      return statuslineRateLimits(in: session)
-    }
-    return statuslineRateLimits(in: root)
-  }
-
-  private func latestStatuslineSession(in root: [String: Any]) -> [String: Any]? {
-    guard let sessions = root["sessions"] as? [String: Any] else {
-      return nil
-    }
-    return sessions.values
+    let sessions = (root["sessions"] as? [String: Any])?.values
       .compactMap { $0 as? [String: Any] }
-      .filter { statuslineRateLimits(in: $0) != nil }
-      .sorted { statuslineUpdatedAt($0) > statuslineUpdatedAt($1) }
-      .first
+      .sorted { statuslineUpdatedAt($0) > statuslineUpdatedAt($1) } ?? [root]
+    var result = ClaudeCodeStatuslineRateLimits()
+    for session in sessions {
+      guard let limits = statuslineRateLimits(in: session) else { continue }
+      if result.fiveHourUsedPercent == nil, limits.fiveHourUsedPercent != nil {
+        result.fiveHourUsedPercent = limits.fiveHourUsedPercent
+        result.fiveHourResetAt = limits.fiveHourResetAt
+      }
+      if result.sevenDayUsedPercent == nil, limits.sevenDayUsedPercent != nil {
+        result.sevenDayUsedPercent = limits.sevenDayUsedPercent
+        result.sevenDayResetAt = limits.sevenDayResetAt
+      }
+      if result.fiveHourUsedPercent != nil && result.sevenDayUsedPercent != nil { break }
+    }
+    return result.hasLimits ? result : nil
   }
 
   private func statuslineRateLimits(in record: [String: Any]) -> ClaudeCodeStatuslineRateLimits? {

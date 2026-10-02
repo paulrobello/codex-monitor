@@ -1132,7 +1132,7 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertTrue(widgetSource.contains("case \"wk\", \"7d limit\", \"7d tokens\":"))
     XCTAssertTrue(widgetSource.contains("return \"7d\""))
     XCTAssertTrue(widgetSource.contains("struct SmallWidgetPercentRow: View"))
-    XCTAssertTrue(widgetSource.contains("Text(\"\\(Int(window.remainingPercent.rounded()))%\")"))
+    XCTAssertTrue(widgetSource.contains("Text(window.isQuotaAvailable ? \"\\(Int(window.remainingPercent.rounded()))%\" : \"Unavailable\")"))
     XCTAssertTrue(widgetSource.contains(".minimumScaleFactor(0.75)"))
   }
 
@@ -1866,6 +1866,89 @@ final class CodexUsageCoreTests: XCTestCase {
     XCTAssertNil(snapshot.weekly?.resetAt)
   }
 
+  func testClaudeCodeWalksSessionTimelineForEachQuotaWindow() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let file = root.appendingPathComponent("statusline.json")
+    try """
+      {"sessions": {
+        "oldest": {"updated_epoch": 1, "rate_limits": {
+          "five_hour_used_pct": 60, "seven_day_used_pct": 25}},
+        "weekly": {"updated_at": "2026-10-01T00:00:00Z", "rate_limits": {
+          "seven_day_used_pct": 100, "seven_day_resets_at": 1791200000}},
+        "five-hour": {"updated_epoch": 1790900000, "rate_limits": {
+          "five_hour_used_pct": 0, "five_hour_resets_at": 1791000000,
+          "seven_day_used_pct": null}},
+        "reset-only": {"updated_epoch": 1790900100, "rate_limits": {
+          "seven_day_resets_at": 1791300000}},
+        "newest": {"updated_epoch": 1790900200, "rate_limits": {
+          "five_hour_used_pct": null, "seven_day_used_pct": null}}
+      }}
+      """.write(to: file, atomically: true, encoding: .utf8)
+    let snapshot = try ClaudeCodeUsageClient(
+      projectsDirectory: root.appendingPathComponent("missing"), statuslineFile: file
+    ).fetchUsage()
+    XCTAssertEqual(snapshot.fiveHour?.remainingPercent, 100)
+    XCTAssertEqual(snapshot.fiveHour?.isQuotaAvailable, true)
+    XCTAssertEqual(snapshot.fiveHour?.resetAt, Date(timeIntervalSince1970: 1791000000))
+    XCTAssertEqual(snapshot.weekly?.remainingPercent, 0)
+    XCTAssertEqual(snapshot.weekly?.isQuotaAvailable, true)
+    XCTAssertEqual(snapshot.weekly?.resetAt, Date(timeIntervalSince1970: 1791200000))
+  }
+
+  func testClaudeCodeReportsUnavailableWhenTimelineHasNoPercentages() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let file = root.appendingPathComponent("statusline.json")
+    try """
+      {"sessions": {
+        "older": {"updated_epoch": 1, "rate_limits": {"seven_day_resets_at": 1791200000}},
+        "newer": {"updated_epoch": 2, "rate_limits": {"seven_day_used_pct": null}}
+      }}
+      """.write(to: file, atomically: true, encoding: .utf8)
+    let project = root.appendingPathComponent("projects/example")
+    try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+    try claudeUsageLine(
+      uuid: "recent", timestamp: "2026-10-02T13:30:00Z", input: 100, output: 50,
+      cacheCreation: 0, cacheRead: 0
+    ).write(to: project.appendingPathComponent("session.jsonl"), atomically: true, encoding: .utf8)
+    let client = ClaudeCodeUsageClient(
+      projectsDirectory: root.appendingPathComponent("projects"), statuslineFile: file
+    )
+    let snapshot = try client.fetchUsage(
+      now: ISO8601DateFormatter().date(from: "2026-10-02T14:00:00Z")!
+    )
+    XCTAssertEqual(snapshot.fiveHour?.isQuotaAvailable, false)
+    XCTAssertEqual(snapshot.weekly?.isQuotaAvailable, false)
+    XCTAssertEqual(snapshot.weekly?.remainingPercent, 0)
+    let cache = CodexUsageCache(cacheURL: root.appendingPathComponent("cache.json"))
+    try cache.save(snapshot: snapshot)
+    XCTAssertEqual(try cache.loadSnapshot()?.weekly?.isQuotaAvailable, false)
+    let noTranscript = try ClaudeCodeUsageClient(
+      projectsDirectory: root.appendingPathComponent("missing"), statuslineFile: file
+    ).fetchUsage()
+    XCTAssertEqual(noTranscript.weekly?.valueText, "Unavailable")
+    XCTAssertEqual(noTranscript.weekly?.isQuotaAvailable, false)
+  }
+
+  func testClaudeCodeFallsBackForMissingWeeklyValueOnly() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let file = root.appendingPathComponent("statusline.json")
+    try #"{"rate_limits":{"five_hour_used_pct":20}}"#
+      .write(to: file, atomically: true, encoding: .utf8)
+    let snapshot = try ClaudeCodeUsageClient(
+      projectsDirectory: root.appendingPathComponent("missing"), statuslineFile: file
+    ).fetchUsage()
+    XCTAssertEqual(snapshot.fiveHour?.remainingPercent, 80)
+    XCTAssertEqual(snapshot.fiveHour?.isQuotaAvailable, true)
+    XCTAssertEqual(snapshot.weekly?.valueText, "Unavailable")
+    XCTAssertEqual(snapshot.weekly?.isQuotaAvailable, false)
+  }
+
   func testClaudeCodeUsageReadsStatuslineLocalRateLimits() throws {
     let root = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)
@@ -2032,7 +2115,8 @@ final class CodexUsageCoreTests: XCTestCase {
 
     XCTAssertEqual(snapshot.provider, CodexUsageProviderID.claudeCode.rawValue)
     XCTAssertNil(snapshot.fiveHour)
-    XCTAssertEqual(snapshot.weekly?.valueText, "0")
+    XCTAssertEqual(snapshot.weekly?.valueText, "Unavailable")
+    XCTAssertEqual(snapshot.weekly?.isQuotaAvailable, false)
     XCTAssertEqual(
       snapshot.weekly?.detail,
       "No Claude Code JSONL sessions were found under \(root.path)."

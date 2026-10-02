@@ -721,7 +721,7 @@ struct SmallWidgetPercentRow: View {
         .lineLimit(1)
         .minimumScaleFactor(0.75)
       Spacer(minLength: 4)
-      Text("\(Int(window.remainingPercent.rounded()))%")
+      Text(window.isQuotaAvailable ? "\(Int(window.remainingPercent.rounded()))%" : "Unavailable")
         .font(.system(size: 16, weight: .bold, design: .rounded))
         .monospacedDigit()
         .foregroundStyle(tint)
@@ -731,6 +731,7 @@ struct SmallWidgetPercentRow: View {
   }
 
   private var tint: Color {
+    guard window.isQuotaAvailable else { return .secondary }
     if window.remainingPercent < 15 {
       return .red
     }
@@ -814,6 +815,7 @@ struct WidgetUsageRow: View {
   }
 
   private var tint: Color {
+    guard window.isQuotaAvailable else { return .secondary }
     if window.remainingPercent < 15 {
       return .red
     }
@@ -824,7 +826,8 @@ struct WidgetUsageRow: View {
   }
 
   private var showsProgressBar: Bool {
-    forcePercentDisplay || window.valueText == nil || window.label.hasSuffix("limit")
+    window.isQuotaAvailable
+      && (forcePercentDisplay || window.valueText == nil || window.label.hasSuffix("limit"))
   }
 
   private var resetText: String {
@@ -852,7 +855,9 @@ struct WidgetUsageRow: View {
 
   private var remainingLabel: some View {
     HStack(alignment: .firstTextBaseline, spacing: 2) {
-      if !forcePercentDisplay, let valueText = window.valueText {
+      if !window.isQuotaAvailable {
+        Text("Unavailable")
+      } else if !forcePercentDisplay, let valueText = window.valueText {
         Text(valueText)
           .monospacedDigit()
       } else {

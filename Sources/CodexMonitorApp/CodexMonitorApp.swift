@@ -200,7 +200,8 @@ final class UsageStore: ObservableObject {
   var menuBarSymbolName: String {
     guard
       let lowestRemaining = [
-        displayedSnapshots.flatMap { [$0.fiveHour?.remainingPercent, $0.weekly?.remainingPercent] }
+        displayedSnapshots.flatMap { [$0.fiveHour, $0.weekly] }
+          .compactMap { $0 }.filter(\.isQuotaAvailable).map(\.remainingPercent)
       ].flatMap { $0 }.compactMap({ $0 }).min()
     else {
       return "gauge.with.dots.needle.bottom.50percent"
@@ -1052,7 +1053,7 @@ struct UsageWindowView: View {
         Spacer()
         Text(displayValueText)
           .font(.system(.title3, design: .rounded).weight(.semibold))
-          .foregroundStyle(tint)
+          .foregroundStyle(window.isQuotaAvailable ? tint : .secondary)
       }
       if showsProgressBar {
         UsageProgressBar(value: window.remainingPercent, tint: tint)
@@ -1074,6 +1075,7 @@ struct UsageWindowView: View {
   }
 
   private var displayValueText: String {
+    guard window.isQuotaAvailable else { return "Unavailable" }
     if forcePercentDisplay {
       return "\(Int(window.remainingPercent.rounded()))%"
     }
@@ -1081,7 +1083,8 @@ struct UsageWindowView: View {
   }
 
   private var showsProgressBar: Bool {
-    forcePercentDisplay || window.valueText == nil || window.label.hasSuffix("limit")
+    window.isQuotaAvailable
+      && (forcePercentDisplay || window.valueText == nil || window.label.hasSuffix("limit"))
   }
 
   private var displayLabel: String {
